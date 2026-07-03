@@ -406,7 +406,9 @@ function Dashboard({leads,user,period,setPeriod}) {
 
 // ── MAIN APP ──
 function App() {
-  const [currentUser,setCurrentUser]=useState(null);
+  const [currentUser,setCurrentUser]=useState(()=>{
+    try { const u=localStorage.getItem("maawan_user"); return u?JSON.parse(u):null; } catch(e){return null;}
+  });
   const [leads,setLeads]=useState([]);
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("dashboard");
@@ -419,18 +421,55 @@ function App() {
 
   useProtection(currentUser?.role);
 
+  const login = (user) => {
+    try { localStorage.setItem("maawan_user", JSON.stringify(user)); } catch(e){}
+    setCurrentUser(user);
+  };
+  const logout = () => {
+    try { localStorage.removeItem("maawan_user"); } catch(e){}
+    setCurrentUser(null);
+    setLeads([]);
+  };
+
+  const callAPI = useCallback((payload) => {
+    return new Promise((resolve) => {
+      const url = SCRIPT_URL + "?callback=cb_" + Date.now();
+      // Use fetch with no-cors as fallback, primary: form POST via iframe
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {"Content-Type": "text/plain"},
+        body: JSON.stringify(payload)
+      }).then(() => {
+        // no-cors returns opaque, try GET with params for reads
+        if (payload.action === "getLeads") {
+          const params = new URLSearchParams({
+            action: payload.action,
+            userId: payload.userId,
+            role: payload.role
+          });
+          return fetch(SCRIPT_URL + "?" + params.toString());
+        }
+        resolve({success:true});
+      }).then(r => r ? r.json() : null)
+        .then(d => d ? resolve(d) : resolve({success:true}))
+        .catch(() => resolve({success:false}));
+    });
+  }, []);
+
   const loadLeads = useCallback(async (user) => {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(SCRIPT_URL, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({action:"getLeads",userId:user.id,role:user.role})
+      const params = new URLSearchParams({
+        action: "getLeads",
+        userId: user.id,
+        role: user.role
       });
+      const res = await fetch(SCRIPT_URL + "?" + params.toString());
       const data = await res.json();
       if (data.success && data.leads) setLeads(data.leads);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("loadLeads:", e); }
     setLoading(false);
   },[]);
 
@@ -454,19 +493,29 @@ function App() {
     setLeads(prev=>{const idx=prev.findIndex(l=>l.id===updated.id);if(idx>=0){const n=[...prev];n[idx]=updated;return n;}return[updated,...prev];});
     setShowModal(false); setEditLead(null);
     try {
-      await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"saveLead",lead:updated})});
-      await loadLeads(currentUser);
-    } catch(e){console.error(e);}
+      const params = new URLSearchParams({
+        action: "saveLead",
+        lead: JSON.stringify(updated)
+      });
+      await fetch(SCRIPT_URL + "?" + params.toString());
+      setTimeout(()=>loadLeads(currentUser), 1500);
+    } catch(e){console.error("saveLead:",e);}
   };
 
   const handleActivity = async (leadId,entry) => {
     setLeads(prev=>prev.map(l=>l.id===leadId?{...l,activityLog:[...(l.activityLog||[]),entry],updatedAt:today()}:l));
     try {
-      await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"addActivity",leadId,entry,userId:currentUser.id})});
-    } catch(e){console.error(e);}
+      const params = new URLSearchParams({
+        action: "addActivity",
+        leadId: leadId,
+        entry: JSON.stringify(entry),
+        userId: currentUser.id
+      });
+      await fetch(SCRIPT_URL + "?" + params.toString());
+    } catch(e){console.error("activity:",e);}
   };
 
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
+  if (!currentUser) return <LoginScreen onLogin={login}/>;
 
   const TABS=[
     {id:"dashboard",label:"📊 Dashboard"},
@@ -491,7 +540,7 @@ function App() {
             <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,fontWeight:600}}>{currentUser.name}</div>
             <div style={{color:"#6366f1",fontSize:11}}>{currentUser.role==="manager"?"مدير":currentUser.role==="tele_sales"?"تلي سيلز":"سيلز"}</div>
           </div>
-          <button onClick={()=>setCurrentUser(null)} style={{padding:"6px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#fca5a5",cursor:"pointer",fontSize:12}}>خروج</button>
+          <button onClick={logout} style={{padding:"6px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#fca5a5",cursor:"pointer",fontSize:12}}>خروج</button>
         </div>
       </div>
 
