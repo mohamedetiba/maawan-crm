@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>معوان CRM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #0d0b26; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #1a1740; }
+  ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
+  input::placeholder { color: rgba(255,255,255,0.3); }
+  select option { background: #1a1740; color: #fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// ── CONFIG ──
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5NJ7cKkRawWeBS-kwv9_sL58TbQmwUreETM_v9YZVypHC9ETX7ptaV6Ldw78-P3KE/exec";
+
+// ── USERS ──
+const USERS = [
+  { id:"mgr1",  username:"mohamed",  password:"Maawan@2025", role:"manager",    name:"محمد"       },
+  { id:"ts1",   username:"tele01",   password:"tele@1234",   role:"tele_sales", name:"تلي سيلز ١" },
+  { id:"ts2",   username:"tele02",   password:"tele@5678",   role:"tele_sales", name:"تلي سيلز ٢" },
+  { id:"s1",    username:"sales01",  password:"sales@1234",  role:"sales",      name:"سيلز ١"     },
+  { id:"s2",    username:"sales02",  password:"sales@5678",  role:"sales",      name:"سيلز ٢"     },
+];
+
+// ── STAGES ──
+const TELE_STAGES = [
+  { id:"new_lead",       label:"ليد جديد",       color:"#6366f1", icon:"🎯" },
+  { id:"data_collected", label:"داتا متجمعة",    color:"#8b5cf6", icon:"📋" },
+  { id:"classified",     label:"مُصنَّف",         color:"#a78bfa", icon:"🏷️" },
+  { id:"first_call",     label:"مكالمة أولى",    color:"#f59e0b", icon:"📞" },
+  { id:"follow_up_1",    label:"متابعة ١",       color:"#f97316", icon:"🔄" },
+  { id:"follow_up_2",    label:"متابعة ٢",       color:"#ef4444", icon:"🔁" },
+  { id:"meeting_booked", label:"اجتماع محجوز",  color:"#10b981", icon:"📅" },
+  { id:"no_answer",      label:"لا يرد",         color:"#6b7280", icon:"📵" },
+  { id:"not_interested", label:"مش مهتم",        color:"#374151", icon:"❌" },
+];
+const SALES_STAGES = [
+  { id:"meeting_held",  label:"اجتماع عُقد",    color:"#6366f1", icon:"🤝" },
+  { id:"proposal_sent", label:"عرض أُرسل",      color:"#8b5cf6", icon:"📄" },
+  { id:"negotiation",   label:"تفاوض",          color:"#f59e0b", icon:"⚖️" },
+  { id:"follow_up_s1",  label:"متابعة سيلز ١", color:"#f97316", icon:"🔄" },
+  { id:"follow_up_s2",  label:"متابعة سيلز ٢", color:"#fb923c", icon:"🔁" },
+  { id:"follow_up_s3",  label:"متابعة سيلز ٣", color:"#fbbf24", icon:"♻️" },
+  { id:"won",           label:"صفقة مُغلقة ✅", color:"#10b981", icon:"🏆" },
+  { id:"lost",          label:"خسرنا",          color:"#ef4444", icon:"💔" },
+];
+const NICHES = ["صيدليات / صحة","ملابس","إلكترونيات","مطاعم / أكل","عيادات / طب","مستحضرات تجميل","أم وطفل","رياضة","أثاث / ديكور","تعليم","عقارات","أخرى"];
+const PRIORITY_COLOR = { high:"#ef4444", medium:"#f59e0b", low:"#10b981" };
+const PRIORITY_LABEL = { high:"عالي", medium:"متوسط", low:"منخفض" };
+
+// ── UTILS ──
+const fmt  = n => Number(n||0).toLocaleString("ar-SA");
+const today = () => new Date().toISOString().split("T")[0];
+function getPeriodLeads(leads, period) {
+  const now = new Date();
+  return leads.filter(l => {
+    const d = new Date(l.createdAt);
+    if (period==="daily")   return d.toDateString()===now.toDateString();
+    if (period==="weekly")  return (now-d)<=7*86400000;
+    if (period==="monthly") return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+    if (period==="quarter") return Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3)&&d.getFullYear()===now.getFullYear();
+    if (period==="half")    return (now-d)<=182*86400000;
+    if (period==="yearly")  return d.getFullYear()===now.getFullYear();
+    return true;
+  });
+}
+
+// ── ANTI-COPY ──
+function useProtection(role) {
+  useEffect(() => {
+    if (role==="manager") return;
+    const block = e => { e.preventDefault(); return false; };
+    const blockKey = e => {
+      if ((e.ctrlKey||e.metaKey)&&["c","a","s","p","u"].includes(e.key.toLowerCase())) { e.preventDefault(); return false; }
+      if (e.key==="F12"||(e.ctrlKey&&e.shiftKey&&e.key==="I")) { e.preventDefault(); return false; }
+    };
+    document.addEventListener("contextmenu",block);
+    document.addEventListener("keydown",blockKey);
+    document.addEventListener("copy",block);
+    document.addEventListener("cut",block);
+    return () => {
+      document.removeEventListener("contextmenu",block);
+      document.removeEventListener("keydown",blockKey);
+      document.removeEventListener("copy",block);
+      document.removeEventListener("cut",block);
+    };
+  },[role]);
+}
+
+// ── BADGE ──
+function Badge({label,color}) {
+  return <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,background:color+"22",color,fontSize:11,fontWeight:600,border:`1px solid ${color}44`}}>{label}</span>;
+}
+
+// ── STAT CARD ──
+function StatCard({label,value,sub,color="#6366f1",icon}) {
+  return (
+    <div style={{background:"#1e1b4b",borderRadius:14,padding:"20px 24px",borderLeft:`4px solid ${color}`,flex:1,minWidth:140}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div>
+          <div style={{color:"rgba(255,255,255,0.5)",fontSize:12,marginBottom:6}}>{label}</div>
+          <div style={{color:"#fff",fontSize:28,fontWeight:800}}>{value}</div>
+          {sub && <div style={{color,fontSize:11,marginTop:4}}>{sub}</div>}
+        </div>
+        <div style={{fontSize:28}}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── LOGIN ──
+function LoginScreen({onLogin}) {
+  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err,setErr]=useState("");
+  const handle = () => {
+    const user = USERS.find(x=>x.username===u&&x.password===p);
+    if (user) onLogin(user); else setErr("اسم المستخدم أو كلمة المرور غلط");
+  };
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0c29,#302b63,#24243e)"}}>
+      <div style={{background:"rgba(255,255,255,0.05)",backdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"48px 40px",width:380,textAlign:"center"}}>
+        <div style={{fontSize:48,marginBottom:8}}>🏢</div>
+        <h1 style={{color:"#fff",fontSize:24,fontWeight:700,margin:"0 0 4px"}}>معوان CRM</h1>
+        <p style={{color:"#a78bfa",fontSize:13,margin:"0 0 32px"}}>نظام إدارة فريق المبيعات</p>
+        {err && <div style={{background:"#ef444420",border:"1px solid #ef4444",borderRadius:8,padding:"10px 14px",color:"#fca5a5",fontSize:13,marginBottom:16}}>{err}</div>}
+        <input value={u} onChange={e=>setU(e.target.value)} placeholder="اسم المستخدم"
+          style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.08)",color:"#fff",fontSize:14,marginBottom:12,outline:"none",direction:"rtl"}} />
+        <input value={p} onChange={e=>setP(e.target.value)} type="password" placeholder="كلمة المرور"
+          onKeyDown={e=>e.key==="Enter"&&handle()}
+          style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.08)",color:"#fff",fontSize:14,marginBottom:20,outline:"none",direction:"rtl"}} />
+        <button onClick={handle} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,fontSize:15}}>دخول</button>
+        <p style={{color:"rgba(255,255,255,0.3)",fontSize:11,marginTop:24}}>© 2025 معوان للتسويق الرقمي</p>
+      </div>
+    </div>
+  );
+}
+
+// ── ACTIVITY MODAL ──
+function ActivityModal({lead,user,onAddActivity,onClose}) {
+  const [action,setAction]=useState("");
+  const add = () => {
+    if (!action.trim()) return;
+    onAddActivity(lead.id,{date:today(),agent:user.name,action});
+    setAction("");
+  };
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#13112e",borderRadius:16,padding:24,width:"100%",maxWidth:500,direction:"rtl",border:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{color:"#fff",margin:0,fontSize:16}}>📝 سجل متابعة — {lead.clientName}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontSize:20,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{maxHeight:260,overflowY:"auto",marginBottom:16}}>
+          {(lead.activityLog||[]).length===0 && <p style={{color:"rgba(255,255,255,0.3)",textAlign:"center",fontSize:13}}>لا يوجد سجل بعد</p>}
+          {[...(lead.activityLog||[])].reverse().map((a,i)=>(
+            <div key={i} style={{borderRight:"2px solid #6366f1",paddingRight:12,marginBottom:14}}>
+              <div style={{color:"rgba(255,255,255,0.4)",fontSize:11}}>{a.date} — {a.agent}</div>
+              <div style={{color:"#e2e8f0",fontSize:13,marginTop:3}}>{a.action}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={action} onChange={e=>setAction(e.target.value)} placeholder="اكتب إجراء أو ملاحظة..."
+            onKeyDown={e=>e.key==="Enter"&&add()}
+            style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.06)",color:"#fff",fontSize:13,outline:"none",direction:"rtl"}} />
+          <button onClick={add} style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#6366f1",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>إضافة</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LEAD MODAL ──
+function LeadModal({lead,user,onSave,onClose}) {
+  const isNew = !lead;
+  const blank = {
+    id:Date.now().toString(),clientName:"",phone:"",email:"",niche:"",storeUrl:"",
+    storeNeeds:"",storeAnalysis:"",solutionPlan:"",
+    teleStage:"new_lead",salesStage:null,
+    teleAgent:user.role==="tele_sales"?user.id:"",
+    salesAgent:user.role==="sales"?user.id:"",
+    priority:"medium",source:"",budget:"",currency:"SAR",
+    notes:"",followUpDate:today(),createdAt:today(),updatedAt:today(),activityLog:[]
+  };
+  const [form,setForm]=useState(lead||blank);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const handleSave = () => {
+    if (!form.clientName||!form.phone){alert("اسم العميل والرقم مطلوبين");return;}
+    const log=[...(form.activityLog||[])];
+    if (isNew) log.push({date:today(),agent:user.name,action:"تم إضافة الليد"});
+    onSave({...form,updatedAt:today(),activityLog:log});
+  };
+
+  const S={width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.06)",color:"#fff",fontSize:13,outline:"none",direction:"rtl"};
+  const SS={...S,background:"#1a1740"};
+  const inp=(lbl,key,type="text",ph="")=>(
+    <div style={{marginBottom:14}}>
+      <label style={{color:"rgba(255,255,255,0.6)",fontSize:12,display:"block",marginBottom:5}}>{lbl}</label>
+      <input type={type} value={form[key]||""} onChange={e=>set(key,e.target.value)} placeholder={ph} style={S}/>
+    </div>
+  );
+  const sel=(lbl,key,opts)=>(
+    <div style={{marginBottom:14}}>
+      <label style={{color:"rgba(255,255,255,0.6)",fontSize:12,display:"block",marginBottom:5}}>{lbl}</label>
+      <select value={form[key]||""} onChange={e=>set(key,e.target.value)} style={SS}>
+        <option value="">— اختر —</option>
+        {opts.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+      </select>
+    </div>
+  );
+  const ta=(lbl,key,rows=3)=>(
+    <div style={{marginBottom:14}}>
+      <label style={{color:"rgba(255,255,255,0.6)",fontSize:12,display:"block",marginBottom:5}}>{lbl}</label>
+      <textarea value={form[key]||""} onChange={e=>set(key,e.target.value)} rows={rows} style={{...S,resize:"vertical"}}/>
+    </div>
+  );
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#13112e",borderRadius:16,padding:28,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",direction:"rtl",border:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+          <h2 style={{color:"#fff",margin:0,fontSize:18}}>{isNew?"➕ إضافة ليد جديد":"✏️ تعديل بيانات العميل"}</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontSize:20,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <div style={{background:"rgba(99,102,241,0.1)",borderRadius:10,padding:16,marginBottom:16,border:"1px solid rgba(99,102,241,0.2)"}}>
+          <p style={{color:"#a78bfa",fontSize:12,margin:"0 0 12px",fontWeight:600}}>📋 البيانات الأساسية</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            {inp("اسم العميل / المتجر","clientName","text","اسم العميل")}
+            {inp("رقم الهاتف","phone","tel","05XXXXXXXX")}
+            {inp("الإيميل","email","email","example@mail.com")}
+            {inp("رابط المتجر","storeUrl","text","store.salla.sa")}
+            {sel("النيتش","niche",NICHES)}
+            {sel("المصدر","source",["سكرابر سلة","إحالة","سوشيال ميديا","جوجل","معرض","أخرى"])}
+            {sel("الأولوية","priority",[{value:"high",label:"🔴 عالي"},{value:"medium",label:"🟡 متوسط"},{value:"low",label:"🟢 منخفض"}])}
+            {inp("تاريخ المتابعة","followUpDate","date")}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:"0 16px"}}>
+            {inp("الميزانية المتوقعة","budget","number","0000")}
+            {sel("العملة","currency",[{value:"SAR",label:"ريال SAR"},{value:"EGP",label:"جنيه EGP"},{value:"USD",label:"دولار USD"}])}
+          </div>
+        </div>
+
+        <div style={{background:"rgba(139,92,246,0.1)",borderRadius:10,padding:16,marginBottom:16,border:"1px solid rgba(139,92,246,0.2)"}}>
+          <p style={{color:"#c4b5fd",fontSize:12,margin:"0 0 12px",fontWeight:600}}>🔍 تحليل المتجر والخدمات</p>
+          {ta("ما يحتاجه المتجر","storeNeeds",2)}
+          {ta("تحليل المتجر","storeAnalysis",3)}
+          {ta("خطة الحلول المقترحة","solutionPlan",3)}
+          {ta("ملاحظات إضافية","notes",2)}
+        </div>
+
+        <div style={{background:"rgba(16,185,129,0.1)",borderRadius:10,padding:16,marginBottom:16,border:"1px solid rgba(16,185,129,0.2)"}}>
+          <p style={{color:"#6ee7b7",fontSize:12,margin:"0 0 12px",fontWeight:600}}>🔄 البايبلاين</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            {sel("مرحلة التلي سيلز","teleStage",TELE_STAGES.map(s=>({value:s.id,label:`${s.icon} ${s.label}`})))}
+            {sel("مرحلة السيلز","salesStage",[{value:"",label:"— لم يبدأ —"},...SALES_STAGES.map(s=>({value:s.id,label:`${s.icon} ${s.label}`}))])}
+            {sel("التلي سيلز المسؤول","teleAgent",USERS.filter(u=>u.role==="tele_sales").map(u=>({value:u.id,label:u.name})))}
+            {sel("السيلز المسؤول","salesAgent",[{value:"",label:"— لم يُعيَّن —"},...USERS.filter(u=>u.role==="sales").map(u=>({value:u.id,label:u.name}))])}
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{padding:"10px 24px",borderRadius:8,border:"1px solid rgba(255,255,255,0.15)",background:"transparent",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13}}>إلغاء</button>
+          <button onClick={handleSave} style={{padding:"10px 28px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>💾 حفظ</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LEAD ROW ──
+function LeadRow({lead,user,onEdit,onActivity,showFull}) {
+  const tS=TELE_STAGES.find(s=>s.id===lead.teleStage);
+  const sS=SALES_STAGES.find(s=>s.id===lead.salesStage);
+  const tU=USERS.find(u=>u.id===lead.teleAgent);
+  const sU=USERS.find(u=>u.id===lead.salesAgent);
+  const overdue=lead.followUpDate&&lead.followUpDate<today();
+  return (
+    <tr style={{borderBottom:"1px solid rgba(255,255,255,0.05)"}}
+      onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,0.06)"}
+      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+      <td style={{padding:"12px 14px",color:"#fff",fontSize:13}}>
+        <div style={{fontWeight:600}}>{showFull?lead.clientName:`عميل #${lead.id}`}</div>
+        {showFull&&<div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginTop:2}}>{lead.niche}</div>}
+      </td>
+      {showFull&&<>
+        <td style={{padding:"12px 14px",color:"rgba(255,255,255,0.7)",fontSize:12,direction:"ltr"}}>{lead.phone}</td>
+        <td style={{padding:"12px 14px"}}><a href={`https://${lead.storeUrl}`} target="_blank" rel="noreferrer" style={{color:"#a78bfa",fontSize:11,textDecoration:"none"}}>{lead.storeUrl||"—"}</a></td>
+      </>}
+      <td style={{padding:"12px 14px"}}>{tS&&<Badge label={`${tS.icon} ${tS.label}`} color={tS.color}/>}</td>
+      <td style={{padding:"12px 14px"}}>{sS?<Badge label={`${sS.icon} ${sS.label}`} color={sS.color}/>:<span style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>—</span>}</td>
+      <td style={{padding:"12px 14px"}}>
+        <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:PRIORITY_COLOR[lead.priority]||"#6b7280",marginLeft:6}}/>
+        <span style={{color:"rgba(255,255,255,0.6)",fontSize:11}}>{PRIORITY_LABEL[lead.priority]}</span>
+      </td>
+      <td style={{padding:"12px 14px",color:overdue?"#ef4444":"rgba(255,255,255,0.5)",fontSize:11}}>{overdue&&"⚠️ "}{lead.followUpDate||"—"}</td>
+      <td style={{padding:"12px 14px",fontSize:11,color:"rgba(255,255,255,0.5)"}}>{tU?.name||"—"}{lead.salesAgent?` / ${sU?.name||"—"}`:""}</td>
+      <td style={{padding:"12px 14px"}}>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>onActivity(lead)} style={{padding:"5px 10px",borderRadius:6,border:"1px solid rgba(99,102,241,0.4)",background:"rgba(99,102,241,0.1)",color:"#a78bfa",cursor:"pointer",fontSize:12}}>📝</button>
+          <button onClick={()=>onEdit(lead)} style={{padding:"5px 10px",borderRadius:6,border:"1px solid rgba(139,92,246,0.4)",background:"rgba(139,92,246,0.1)",color:"#c4b5fd",cursor:"pointer",fontSize:12}}>✏️</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── DASHBOARD ──
+function Dashboard({leads,user,period,setPeriod}) {
+  const pl=getPeriodLeads(leads,period);
+  const won=pl.filter(l=>l.salesStage==="won");
+  const lost=pl.filter(l=>l.salesStage==="lost");
+  const meetings=pl.filter(l=>l.teleStage==="meeting_booked");
+  const totalBudget=won.reduce((s,l)=>s+Number(l.budget||0),0);
+  const pipelineVal=pl.filter(l=>!["won","lost"].includes(l.salesStage)).reduce((s,l)=>s+Number(l.budget||0),0);
+  const overdue=leads.filter(l=>l.followUpDate&&l.followUpDate<today()&&!["won","lost"].includes(l.salesStage));
+  const PERIODS=[{id:"daily",label:"اليوم"},{id:"weekly",label:"هذا الأسبوع"},{id:"monthly",label:"هذا الشهر"},{id:"quarter",label:"هذا الربع"},{id:"half",label:"نصف العام"},{id:"yearly",label:"هذا العام"}];
+  const teleDist=TELE_STAGES.map(s=>({...s,count:pl.filter(l=>l.teleStage===s.id).length})).filter(s=>s.count>0);
+  const salesDist=SALES_STAGES.map(s=>({...s,count:pl.filter(l=>l.salesStage===s.id).length})).filter(s=>s.count>0);
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+        {PERIODS.map(p=><button key={p.id} onClick={()=>setPeriod(p.id)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid",cursor:"pointer",fontSize:12,fontWeight:600,borderColor:period===p.id?"#6366f1":"rgba(255,255,255,0.1)",background:period===p.id?"#6366f1":"transparent",color:period===p.id?"#fff":"rgba(255,255,255,0.5)"}}>{p.label}</button>)}
+      </div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:20}}>
+        <StatCard label="إجمالي الليدز" value={pl.length} icon="🎯" color="#6366f1"/>
+        <StatCard label="اجتماعات محجوزة" value={meetings.length} icon="📅" color="#8b5cf6"/>
+        <StatCard label="صفقات مغلقة" value={won.length} icon="🏆" color="#10b981"/>
+        <StatCard label="صفقات خسرناها" value={lost.length} icon="💔" color="#ef4444"/>
+        <StatCard label="قيمة البايبلاين" value={fmt(pipelineVal)} sub={won.length>0?`مُغلق: ${fmt(totalBudget)} SAR`:""} icon="💰" color="#f59e0b"/>
+      </div>
+      {overdue.length>0&&(
+        <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:16,marginBottom:20}}>
+          <p style={{color:"#fca5a5",fontSize:13,fontWeight:700,margin:"0 0 10px"}}>⚠️ متابعات متأخرة ({overdue.length})</p>
+          {overdue.slice(0,5).map(l=><div key={l.id} style={{color:"rgba(255,255,255,0.7)",fontSize:12,padding:"4px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>{user.role==="manager"?l.clientName:`عميل #${l.id}`} — المفروض {l.followUpDate}</div>)}
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        <div style={{background:"#1e1b4b",borderRadius:12,padding:20}}>
+          <p style={{color:"rgba(255,255,255,0.6)",fontSize:12,margin:"0 0 14px",fontWeight:600}}>توزيع مراحل التلي سيلز</p>
+          {teleDist.length===0&&<p style={{color:"rgba(255,255,255,0.2)",fontSize:12}}>لا يوجد بيانات</p>}
+          {teleDist.map(s=><div key={s.id} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{s.icon} {s.label}</span>
+              <span style={{color:s.color,fontWeight:700,fontSize:13}}>{s.count}</span>
+            </div>
+            <div style={{height:4,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+              <div style={{height:"100%",width:`${(s.count/pl.length*100)||0}%`,background:s.color,borderRadius:2}}/>
+            </div>
+          </div>)}
+        </div>
+        <div style={{background:"#1e1b4b",borderRadius:12,padding:20}}>
+          <p style={{color:"rgba(255,255,255,0.6)",fontSize:12,margin:"0 0 14px",fontWeight:600}}>توزيع مراحل السيلز</p>
+          {salesDist.length===0&&<p style={{color:"rgba(255,255,255,0.2)",fontSize:12}}>لا يوجد بيانات</p>}
+          {salesDist.map(s=><div key={s.id} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{s.icon} {s.label}</span>
+              <span style={{color:s.color,fontWeight:700,fontSize:13}}>{s.count}</span>
+            </div>
+            <div style={{height:4,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+              <div style={{height:"100%",width:`${(s.count/Math.max(pl.filter(l=>l.salesStage).length,1)*100)||0}%`,background:s.color,borderRadius:2}}/>
+            </div>
+          </div>)}
+        </div>
+      </div>
+      {user.role==="manager"&&(
+        <div style={{background:"#1e1b4b",borderRadius:12,padding:20,marginTop:16}}>
+          <p style={{color:"rgba(255,255,255,0.6)",fontSize:12,margin:"0 0 14px",fontWeight:600}}>🏅 أداء الموظفين</p>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{color:"rgba(255,255,255,0.4)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+              <th style={{textAlign:"right",padding:"8px 12px"}}>الموظف</th>
+              <th style={{textAlign:"right",padding:"8px 12px"}}>الدور</th>
+              <th style={{textAlign:"right",padding:"8px 12px"}}>ليدز</th>
+              <th style={{textAlign:"right",padding:"8px 12px"}}>اجتماعات</th>
+              <th style={{textAlign:"right",padding:"8px 12px"}}>مغلق</th>
+            </tr></thead>
+            <tbody>{USERS.filter(u=>u.role!=="manager").map(u=>{
+              const ml=pl.filter(l=>l.teleAgent===u.id||l.salesAgent===u.id);
+              return <tr key={u.id} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                <td style={{padding:"10px 12px",color:"#e2e8f0",fontWeight:600}}>{u.name}</td>
+                <td style={{padding:"10px 12px",color:"rgba(255,255,255,0.5)"}}>{u.role==="tele_sales"?"تلي سيلز":"سيلز"}</td>
+                <td style={{padding:"10px 12px",color:"#a78bfa",fontWeight:700}}>{ml.length}</td>
+                <td style={{padding:"10px 12px",color:"#f59e0b",fontWeight:700}}>{ml.filter(l=>l.teleStage==="meeting_booked").length}</td>
+                <td style={{padding:"10px 12px",color:"#10b981",fontWeight:700}}>{ml.filter(l=>l.salesStage==="won").length}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MAIN APP ──
+function App() {
+  const [currentUser,setCurrentUser]=useState(null);
+  const [leads,setLeads]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [tab,setTab]=useState("dashboard");
+  const [search,setSearch]=useState("");
+  const [filterPriority,setFilterPriority]=useState("");
+  const [editLead,setEditLead]=useState(null);
+  const [showModal,setShowModal]=useState(false);
+  const [activityLead,setActivityLead]=useState(null);
+  const [period,setPeriod]=useState("monthly");
+
+  useProtection(currentUser?.role);
+
+  const loadLeads = useCallback(async (user) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await fetch(SCRIPT_URL, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({action:"getLeads",userId:user.id,role:user.role})
+      });
+      const data = await res.json();
+      if (data.success && data.leads) setLeads(data.leads);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{ if(currentUser) loadLeads(currentUser); },[currentUser,loadLeads]);
+
+  const visibleLeads = !currentUser ? [] : leads.filter(l=>{
+    if (currentUser.role==="manager") return true;
+    if (currentUser.role==="tele_sales") return l.teleAgent===currentUser.id;
+    if (currentUser.role==="sales") return l.salesAgent===currentUser.id||l.teleStage==="meeting_booked";
+    return false;
+  });
+
+  const filteredLeads = visibleLeads.filter(l=>{
+    const q=search.toLowerCase();
+    const ms=!q||(currentUser.role==="manager"&&((l.clientName||"").toLowerCase().includes(q)||(l.phone||"").includes(q)))||(currentUser.role!=="manager");
+    const mp=!filterPriority||l.priority===filterPriority;
+    return ms&&mp;
+  });
+
+  const handleSave = async (updated) => {
+    setLeads(prev=>{const idx=prev.findIndex(l=>l.id===updated.id);if(idx>=0){const n=[...prev];n[idx]=updated;return n;}return[updated,...prev];});
+    setShowModal(false); setEditLead(null);
+    try {
+      await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"saveLead",lead:updated})});
+      await loadLeads(currentUser);
+    } catch(e){console.error(e);}
+  };
+
+  const handleActivity = async (leadId,entry) => {
+    setLeads(prev=>prev.map(l=>l.id===leadId?{...l,activityLog:[...(l.activityLog||[]),entry],updatedAt:today()}:l));
+    try {
+      await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"addActivity",leadId,entry,userId:currentUser.id})});
+    } catch(e){console.error(e);}
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
+
+  const TABS=[
+    {id:"dashboard",label:"📊 Dashboard"},
+    {id:"leads",label:"👥 الليدز"},
+    {id:"pipeline",label:"🔄 البايبلاين"},
+  ];
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0d0b26",color:"#fff",fontFamily:"'Segoe UI',Tahoma,Arial,sans-serif",direction:"rtl"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#13112e,#1a1740)",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:20}}>
+          <div style={{fontWeight:800,fontSize:18,color:"#a78bfa"}}>🏢 معوان CRM</div>
+          <div style={{display:"flex",gap:4}}>
+            {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"6px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:tab===t.id?"rgba(99,102,241,0.25)":"transparent",color:tab===t.id?"#a78bfa":"rgba(255,255,255,0.5)"}}>{t.label}</button>)}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          {loading&&<span style={{color:"#a78bfa",fontSize:12}}>⏳ جارٍ التحميل...</span>}
+          <button onClick={()=>loadLeads(currentUser)} style={{padding:"5px 12px",borderRadius:8,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(99,102,241,0.1)",color:"#a78bfa",cursor:"pointer",fontSize:12}}>🔄</button>
+          <div style={{textAlign:"left"}}>
+            <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,fontWeight:600}}>{currentUser.name}</div>
+            <div style={{color:"#6366f1",fontSize:11}}>{currentUser.role==="manager"?"مدير":currentUser.role==="tele_sales"?"تلي سيلز":"سيلز"}</div>
+          </div>
+          <button onClick={()=>setCurrentUser(null)} style={{padding:"6px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#fca5a5",cursor:"pointer",fontSize:12}}>خروج</button>
+        </div>
+      </div>
+
+      <div style={{padding:"24px",maxWidth:1400,margin:"0 auto"}}>
+        {tab==="dashboard"&&<Dashboard leads={visibleLeads} user={currentUser} period={period} setPeriod={setPeriod}/>}
+
+        {tab==="leads"&&(
+          <div>
+            <div style={{display:"flex",gap:12,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
+              <h2 style={{margin:0,fontSize:18,color:"#fff"}}>قائمة الليدز ({filteredLeads.length})</h2>
+              <div style={{flex:1}}/>
+              {currentUser.role==="manager"&&<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 بحث..." style={{padding:"8px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.06)",color:"#fff",fontSize:13,outline:"none",width:200}}/>}
+              <select value={filterPriority} onChange={e=>setFilterPriority(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"#1a1740",color:"#fff",fontSize:13}}>
+                <option value="">كل الأولويات</option>
+                <option value="high">🔴 عالي</option>
+                <option value="medium">🟡 متوسط</option>
+                <option value="low">🟢 منخفض</option>
+              </select>
+              <button onClick={()=>{setEditLead(null);setShowModal(true);}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>➕ إضافة ليد</button>
+            </div>
+            <div style={{background:"#13112e",borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr style={{background:"rgba(99,102,241,0.1)",color:"rgba(255,255,255,0.5)",fontSize:11}}>
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>العميل</th>
+                      {currentUser.role==="manager"&&<><th style={{textAlign:"right",padding:"12px 14px"}}>الهاتف</th><th style={{textAlign:"right",padding:"12px 14px"}}>المتجر</th></>}
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>مرحلة تلي سيلز</th>
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>مرحلة سيلز</th>
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>الأولوية</th>
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>المتابعة</th>
+                      <th style={{textAlign:"right",padding:"12px 14px"}}>المسؤولون</th>
+                      <th style={{padding:"12px 14px"}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.length===0&&<tr><td colSpan={9} style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.2)"}}>{loading?"⏳ جارٍ التحميل...":"لا يوجد ليدز — اضغط ➕ لإضافة أول ليد"}</td></tr>}
+                    {filteredLeads.map(l=><LeadRow key={l.id} lead={l} user={currentUser} showFull={currentUser.role==="manager"} onEdit={l=>{setEditLead(l);setShowModal(true);}} onActivity={setActivityLead}/>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab==="pipeline"&&(
+          <div>
+            <h2 style={{margin:"0 0 20px",fontSize:18}}>🔄 البايبلاين الكامل</h2>
+            <p style={{color:"rgba(255,255,255,0.4)",fontSize:12,margin:"0 0 16px",fontWeight:600}}>📞 تلي سيلز</p>
+            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:16}}>
+              {TELE_STAGES.map(stage=>{
+                const sl=visibleLeads.filter(l=>l.teleStage===stage.id);
+                return <div key={stage.id} style={{minWidth:180,background:"#13112e",borderRadius:12,padding:12,border:`1px solid ${stage.color}33`,flexShrink:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <span style={{color:stage.color,fontSize:12,fontWeight:700}}>{stage.icon} {stage.label}</span>
+                    <span style={{background:stage.color+"22",color:stage.color,borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{sl.length}</span>
+                  </div>
+                  {sl.map(l=><div key={l.id} onClick={()=>{setEditLead(l);setShowModal(true);}} style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px",marginBottom:8,cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{color:"#e2e8f0",fontSize:12,fontWeight:600}}>{currentUser.role==="manager"?l.clientName:`#${l.id}`}</div>
+                    <div style={{color:"rgba(255,255,255,0.4)",fontSize:10,marginTop:3}}>{l.niche}</div>
+                    <div style={{marginTop:6}}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:PRIORITY_COLOR[l.priority],display:"inline-block",marginLeft:4}}/>
+                      <span style={{color:"rgba(255,255,255,0.3)",fontSize:10}}>{l.followUpDate}</span>
+                    </div>
+                  </div>)}
+                </div>;
+              })}
+            </div>
+            <p style={{color:"rgba(255,255,255,0.4)",fontSize:12,margin:"20px 0 16px",fontWeight:600}}>💼 سيلز</p>
+            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:16}}>
+              {SALES_STAGES.map(stage=>{
+                const sl=visibleLeads.filter(l=>l.salesStage===stage.id);
+                return <div key={stage.id} style={{minWidth:180,background:"#13112e",borderRadius:12,padding:12,border:`1px solid ${stage.color}33`,flexShrink:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <span style={{color:stage.color,fontSize:12,fontWeight:700}}>{stage.icon} {stage.label}</span>
+                    <span style={{background:stage.color+"22",color:stage.color,borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{sl.length}</span>
+                  </div>
+                  {sl.map(l=><div key={l.id} onClick={()=>{setEditLead(l);setShowModal(true);}} style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px",marginBottom:8,cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{color:"#e2e8f0",fontSize:12,fontWeight:600}}>{currentUser.role==="manager"?l.clientName:`#${l.id}`}</div>
+                    <div style={{color:"#f59e0b",fontSize:10,marginTop:3}}>{l.budget?`${fmt(l.budget)} ${l.currency}`:"—"}</div>
+                  </div>)}
+                </div>;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showModal&&<LeadModal lead={editLead} user={currentUser} onSave={handleSave} onClose={()=>{setShowModal(false);setEditLead(null);}}/>}
+      {activityLead&&<ActivityModal lead={activityLead} user={currentUser} onAddActivity={handleActivity} onClose={()=>setActivityLead(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
