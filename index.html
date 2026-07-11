@@ -541,7 +541,7 @@ function RenewalModal({renewal,user,onSave,onClose}) {
 
   const markRenewed = () => {
     const next = addMonths(form.nextRenewalDate||today(), form.cycle);
-    setForm(f=>({...f, nextRenewalDate:next, status:"active"}));
+    setForm(f=>({...f, nextRenewalDate:next, status:"active", _renewedNow:true}));
   };
 
   const handleSave = () => {
@@ -595,6 +595,11 @@ function RenewalModal({renewal,user,onSave,onClose}) {
           ✅ العميل جدّد — رحّل تاريخ التجديد للدورة الجاية
         </button>
       )}
+      {form._renewedNow && (
+        <div style={{background:T.okBg,border:"1px solid #a7f3d0",borderRadius:10,padding:"10px 14px",color:T.ok,fontSize:12,fontWeight:700,marginBottom:10}}>
+          💰 عند الحفظ هيتسجل تحصيل تلقائي بقيمة {fmt(form.contractValue)} {form.currency} في الحسابات
+        </div>
+      )}
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={btnGhost}>إلغاء</button>
@@ -606,7 +611,7 @@ function RenewalModal({renewal,user,onSave,onClose}) {
 
 // ════════════════ FINANCE MODALS ════════════════
 function ExpenseModal({expense,onSave,onClose}) {
-  const blank = { id:"E"+Date.now(), month:thisMonth(), category:"مرتبات", label:"", amount:"", currency:"SAR", notes:"", createdAt:today() };
+  const blank = { id:"E"+Date.now(), month:thisMonth(), category:"مرتبات", label:"", amount:"", currency:"SAR", notes:"", recurring:false, createdAt:today() };
   const [form,setForm]=useState(expense?{...blank,...expense}:blank);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   return (
@@ -627,6 +632,10 @@ function ExpenseModal({expense,onSave,onClose}) {
         </Field>
       </div>
       <Field label="ملاحظات"><input value={form.notes} onChange={e=>set("notes",e.target.value)} style={inputS}/></Field>
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:form.recurring?T.accent:T.textSoft,cursor:"pointer",marginBottom:14,background:form.recurring?T.accentBg:"#f8fafc",padding:"10px 14px",borderRadius:10,border:`1px solid ${form.recurring?"#c7d2fe":T.cardBorder}`}}>
+        <input type="checkbox" checked={!!form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{accentColor:T.primary,width:16,height:16}}/>
+        🔁 مصروف متكرر — يتسجل تلقائياً أول كل شهر
+      </label>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={btnGhost}>إلغاء</button>
         <button onClick={()=>{ if(!form.amount){alert("المبلغ مطلوب");return;} onSave(form); }} style={btnPrimary}>💾 حفظ</button>
@@ -738,6 +747,33 @@ function FinanceTab({expenses,collections,settings,onAddExpense,onEditExpense,on
               </div>;
             })}
             {totalExpenses===0 && <p style={{color:T.textMuted,fontSize:12}}>لا يوجد مصاريف في الفترة دي</p>}
+          </div>
+          <div style={{background:T.card,borderRadius:14,padding:20,boxShadow:T.shadow,marginTop:14}}>
+            <p style={{color:T.textSoft,fontSize:12,fontWeight:700,marginBottom:14}}>📊 شهر بشهر (آخر ٦ شهور)</p>
+            {(()=>{
+              const months=[]; const d=new Date();
+              for(let i=5;i>=0;i--){const m=new Date(d.getFullYear(),d.getMonth()-i,1);months.push(m.toISOString().slice(0,7));}
+              const rows=months.map(m=>{
+                const col=collections.filter(x=>(String(x.date||"")).slice(0,7)===m).reduce((s,x)=>s+Number(x.amount||0),0);
+                const exp=expenses.filter(x=>(String(x.month||"")).slice(0,7)===m).reduce((s,x)=>s+Number(x.amount||0),0);
+                return {m,col,exp,net:col-exp};
+              });
+              const max=Math.max(...rows.map(r=>Math.max(r.col,r.exp)),1);
+              return rows.map(r=>(
+                <div key={r.m} style={{marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                    <span style={{color:T.text,fontWeight:700}}>{r.m}</span>
+                    <span style={{fontWeight:800,color:r.net>=0?T.ok:T.danger}}>{r.net>=0?"📈":"📉"} صافي: {fmt(r.net)}</span>
+                  </div>
+                  <div style={{height:8,background:"#f1f5f9",borderRadius:4,marginBottom:3}}><div style={{height:"100%",width:`${r.col/max*100}%`,background:T.ok,borderRadius:4}}/></div>
+                  <div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${r.exp/max*100}%`,background:T.danger,borderRadius:4}}/></div>
+                </div>
+              ));
+            })()}
+            <div style={{display:"flex",gap:14,fontSize:11,color:T.textSoft,marginTop:6}}>
+              <span><span style={{display:"inline-block",width:10,height:10,background:T.ok,borderRadius:2,marginLeft:4}}/>تحصيل</span>
+              <span><span style={{display:"inline-block",width:10,height:10,background:T.danger,borderRadius:2,marginLeft:4}}/>مصاريف</span>
+            </div>
           </div>
         </div>
       )}
@@ -885,7 +921,7 @@ function RenewalsTab({renewals,user,onEdit,onAdd}) {
 }
 
 // ════════════════ LEAD ROW ════════════════
-function LeadRow({lead,user,onEdit,onActivity,showFull}) {
+function LeadRow({lead,user,onEdit,onActivity,onQuickSend,showFull}) {
   const tS=TELE_STAGES.find(s=>s.id===lead.teleStage);
   const sS=SALES_STAGES.find(s=>s.id===lead.salesStage);
   const alerts = getLeadAlerts(lead);
@@ -913,6 +949,7 @@ function LeadRow({lead,user,onEdit,onActivity,showFull}) {
       </td>
       <td style={{padding:"12px 14px"}}>
         <div style={{display:"flex",gap:6}}>
+          {onQuickSend&&lead.phone&&<button onClick={()=>onQuickSend(lead)} title="إرسال واتساب" style={{...btnGhost,padding:"5px 10px",fontSize:12,background:"#dcfce7",borderColor:"#bbf7d0",color:"#15803d",fontWeight:700}}>💬</button>}
           <button onClick={()=>onActivity(lead)} style={{...btnGhost,padding:"5px 10px",fontSize:12}}>📝</button>
           <button onClick={()=>onEdit(lead)} style={{...btnGhost,padding:"5px 10px",fontSize:12}}>✏️</button>
         </div>
@@ -922,7 +959,7 @@ function LeadRow({lead,user,onEdit,onActivity,showFull}) {
 }
 
 // ════════════════ DASHBOARD ════════════════
-function Dashboard({leads,renewals,user,period,setPeriod}) {
+function Dashboard({leads,renewals,user,period,setPeriod,targets}) {
   const pl = getPeriodItems(leads, period, "createdAt");
   const won=pl.filter(l=>l.salesStage==="won");
   const lost=pl.filter(l=>l.salesStage==="lost");
@@ -1010,6 +1047,131 @@ function Dashboard({leads,renewals,user,period,setPeriod}) {
           </div>
         </div>
       )}
+
+      {/* 🎯 تارجت الشهر — للموظف */}
+      {targets && targets[user.id] && (()=>{
+        const ml = getPeriodItems(leads,"monthly","createdAt").filter(l=>l.teleAgent===user.id||l.salesAgent===user.id);
+        const tg = targets[user.id];
+        const rows = [
+          {label:"📅 اجتماعات محجوزة", val: ml.filter(l=>l.teleStage==="meeting_booked").length, target: Number(tg.meetings||0)},
+          {label:"🏆 صفقات مغلقة", val: ml.filter(l=>l.salesStage==="won").length, target: Number(tg.won||0)},
+        ].filter(r=>r.target>0);
+        if (!rows.length) return null;
+        return <div style={{background:T.card,borderRadius:14,padding:18,marginTop:14,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 14px",fontWeight:700}}>🎯 تارجت الشهر بتاعك</p>
+          {rows.map(r=>{
+            const pct = Math.min(100, Math.round(r.val/r.target*100));
+            const clr = pct>=100?T.ok:pct>=60?T.warn:T.danger;
+            return <div key={r.label} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:12}}>
+                <span style={{color:T.text,fontWeight:600}}>{r.label}</span>
+                <span style={{color:clr,fontWeight:800}}>{r.val} / {r.target} ({pct}%)</span>
+              </div>
+              <div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:pct+"%",background:clr,borderRadius:4,transition:"width 0.4s"}}/></div>
+            </div>;
+          })}
+        </div>;
+      })()}
+
+      {/* 🎯 التارجت مقابل الفعلي — للمدير */}
+      {/* معدل التحويل حسب المصدر والنيتش */}
+      {pl.length>0 && (()=>{
+        const groupRates = (key) => {
+          const groups = {};
+          pl.forEach(l=>{ const k=l[key]||"غير محدد"; groups[k]=groups[k]||{total:0,meet:0,won:0}; groups[k].total++; if(l.teleStage==="meeting_booked"||l.salesStage)groups[k].meet++; if(l.salesStage==="won")groups[k].won++; });
+          return Object.entries(groups).sort((a,b)=>b[1].total-a[1].total).slice(0,6);
+        };
+        const bySource = groupRates("source"), byNiche = groupRates("niche");
+        const rateRow = ([name,g],i) => (
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,fontSize:12}}>
+            <span style={{minWidth:110,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span>
+            <span style={{color:T.textMuted,minWidth:44}}>{g.total} ليد</span>
+            <span style={{color:"#7c3aed",fontWeight:700,minWidth:80}}>📅 {g.total?Math.round(g.meet/g.total*100):0}% اجتماع</span>
+            <span style={{color:T.ok,fontWeight:800,minWidth:70}}>🏆 {g.total?Math.round(g.won/g.total*100):0}% إغلاق</span>
+          </div>
+        );
+        return (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14,marginTop:14}}>
+            <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+              <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>📈 معدل التحويل حسب المصدر</p>
+              {bySource.map(rateRow)}
+            </div>
+            <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+              <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>📈 معدل التحويل حسب النيتش</p>
+              {byNiche.map(rateRow)}
+            </div>
+          </div>
+        );
+      })()}
+
+      {can.allLeads(user) && targets && Object.keys(targets).some(k=>k!=="company") && (()=>{
+        const ml = getPeriodItems(leads,"monthly","createdAt");
+        const rows = USERS.filter(u=>u.role!=="manager"&&targets[u.id]&&(Number(targets[u.id].meetings||0)>0||Number(targets[u.id].won||0)>0));
+        if (!rows.length) return null;
+        return <div style={{background:T.card,borderRadius:14,padding:18,marginTop:14,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 14px",fontWeight:700}}>🎯 تارجت الفريق مقابل الفعلي (الشهر الحالي)</p>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{color:T.textMuted,borderBottom:`1px solid ${T.cardBorder}`}}>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>الموظف</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>اجتماعات</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>صفقات</th>
+              </tr></thead>
+              <tbody>{rows.map(u=>{
+                const mine = ml.filter(l=>l.teleAgent===u.id||l.salesAgent===u.id);
+                const tg = targets[u.id];
+                const cell = (val, target) => {
+                  if (!Number(target)) return <span style={{color:T.textMuted}}>—</span>;
+                  const pct = Math.min(100, Math.round(val/target*100));
+                  const clr = pct>=100?T.ok:pct>=60?T.warn:T.danger;
+                  return <div style={{minWidth:130}}>
+                    <div style={{fontSize:11,fontWeight:800,color:clr,marginBottom:3}}>{val}/{target} ({pct}%)</div>
+                    <div style={{height:5,background:"#f1f5f9",borderRadius:3}}><div style={{height:"100%",width:pct+"%",background:clr,borderRadius:3}}/></div>
+                  </div>;
+                };
+                return <tr key={u.id} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"9px 12px",color:T.text,fontWeight:700}}>{u.name}</td>
+                  <td style={{padding:"9px 12px"}}>{cell(mine.filter(l=>l.teleStage==="meeting_booked").length, tg.meetings)}</td>
+                  <td style={{padding:"9px 12px"}}>{cell(mine.filter(l=>l.salesStage==="won").length, tg.won)}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
+        </div>;
+      })()}
+
+      {/* 📈 معدلات التحويل */}
+      {can.allLeads(user) && pl.length>0 && (()=>{
+        const groups = (key) => {
+          const map = {};
+          pl.forEach(l=>{ const k=l[key]||"غير محدد"; if(!map[k])map[k]={leads:0,meetings:0,won:0}; map[k].leads++; if(l.teleStage==="meeting_booked"||l.salesStage)map[k].meetings++; if(l.salesStage==="won")map[k].won++; });
+          return Object.entries(map).sort((a,b)=>b[1].leads-a[1].leads).slice(0,8);
+        };
+        const tbl = (title,key)=>(
+          <div key={key} style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,flex:1,minWidth:280}}>
+            <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>{title}</p>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{color:T.textMuted}}>
+                <th style={{textAlign:"right",padding:"6px 8px"}}></th>
+                <th style={{padding:"6px 8px"}}>ليدز</th>
+                <th style={{padding:"6px 8px"}}>وصل اجتماع</th>
+                <th style={{padding:"6px 8px"}}>قفل</th>
+                <th style={{padding:"6px 8px"}}>تحويل</th>
+              </tr></thead>
+              <tbody>{groups(key).map(([k,v])=>(
+                <tr key={k} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"7px 8px",color:T.text,fontWeight:600}}>{k}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.accent,fontWeight:700}}>{v.leads}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.warn,fontWeight:700}}>{v.meetings}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.ok,fontWeight:700}}>{v.won}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:800,color:v.leads&&v.won/v.leads>=0.1?T.ok:T.textSoft}}>{v.leads?Math.round(v.won/v.leads*100):0}%</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        );
+        return <div style={{display:"flex",gap:14,marginTop:14,flexWrap:"wrap"}}>{[tbl("📈 التحويل حسب المصدر","source"),tbl("📈 التحويل حسب النيتش","niche")]}</div>;
+      })()}
     </div>
   );
 }
@@ -1047,7 +1209,7 @@ function NewChatModal({instances,user,onSend,onClose}) {
 }
 
 // ════════════════ WHATSAPP TAB ════════════════
-function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCreateLeadFromChat}) {
+function WhatsAppTab({user,instances,funnel,quickReplies,leads,slaHours=2,onOpenLead,onCreateLeadFromChat}) {
   const [chats,setChats]=useState([]);
   const [activeChat,setActiveChat]=useState(null);
   const [messages,setMessages]=useState([]);
@@ -1058,6 +1220,8 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
   const [showFavs,setShowFavs]=useState(false);
   const [favMsgs,setFavMsgs]=useState([]);
   const [showNew,setShowNew]=useState(false);
+  const [showSched,setShowSched]=useState(false);
+  const [schedList,setSchedList]=useState([]);
   const [busy,setBusy]=useState(false);
   const [loadingChats,setLoadingChats]=useState(true);
   const msgsEndRef = useRef(null);
@@ -1094,7 +1258,14 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
 
   useEffect(()=>{ if(msgsEndRef.current) msgsEndRef.current.scrollIntoView({behavior:"smooth"}); },[messages]);
 
-  const openChat = (c) => { setActiveChat(c); setShowFavs(false); loadMessages(c.chat_id); };
+  const openChat = (c) => { setActiveChat(c); setShowFavs(false); setShowSched(false); loadMessages(c.chat_id); };
+  const loadSched = async () => {
+    setShowSched(true); setShowFavs(false); setActiveChat(null);
+    try {
+      const res = await jsonpCall({ action:"getScheduled", userId:user.id });
+      if (res.success) setSchedList(res.items||[]);
+    } catch(e){}
+  };
 
   const send = async () => {
     if (!text.trim()||!activeChat) return;
@@ -1129,7 +1300,7 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
   };
 
   const loadFavs = async () => {
-    setShowFavs(true); setActiveChat(null);
+    setShowFavs(true); setShowSched(false); setActiveChat(null);
     try {
       const res = await jsonpCall({ action:"getFavMessages", userId:user.id });
       if (res.success) setFavMsgs(res.messages||[]);
@@ -1158,6 +1329,7 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
         <h2 style={{margin:0,fontSize:17,color:T.text}}>💬 الواتساب {totalUnread>0&&<span style={{background:T.danger,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,marginRight:6}}>{totalUnread}</span>}</h2>
         <div style={{flex:1}}/>
         <button onClick={loadFavs} style={{...btnGhost,padding:"7px 14px",fontSize:12,background:showFavs?"#fefce8":"#fff",borderColor:showFavs?"#eab308":T.cardBorder,color:showFavs?"#a16207":T.textSoft,fontWeight:700}}>⭐ المفضلة</button>
+        <button onClick={loadSched} style={{...btnGhost,padding:"7px 14px",fontSize:12,background:showSched?T.accentBg:"#fff",borderColor:showSched?"#c7d2fe":T.cardBorder,color:showSched?T.accent:T.textSoft,fontWeight:700}}>⏰ المجدولة</button>
         <button onClick={()=>setShowNew(true)} style={btnPrimary}>✉️ محادثة جديدة</button>
       </div>
 
@@ -1181,17 +1353,18 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
           {!loadingChats && filteredChats.length===0 && <p style={{color:T.textMuted,textAlign:"center",padding:30,fontSize:13}}>لا يوجد محادثات{fStatus||waSearch?" مطابقة":""} بعد<br/><span style={{fontSize:11}}>الرسايل الجاية هتظهر هنا تلقائياً</span></p>}
           {filteredChats.map(c=>{
             const f = funnel.find(x=>x.id===c.funnel);
+            const slaBreach = Number(c.unread)>0 && c.lastMsgAt && (Date.now()-new Date(c.lastMsgAt).getTime()) > slaHours*3600000;
             const inst = instances.find(i=>i.id===c.instance_id);
             const lead = leads.find(l=>String(l.id)===String(c.leadId));
             return (
-              <div key={c.chat_id} onClick={()=>openChat(c)} style={{padding:"12px 14px",borderBottom:`1px solid ${T.cardBorder}`,cursor:"pointer",background:activeChat?.chat_id===c.chat_id?T.accentBg:"transparent"}}>
+              <div key={c.chat_id} onClick={()=>openChat(c)} style={{padding:"12px 14px",borderBottom:`1px solid ${T.cardBorder}`,cursor:"pointer",background:activeChat?.chat_id===c.chat_id?T.accentBg:(slaBreach?"#fef2f2":"transparent"),borderRight:slaBreach?`3px solid ${T.danger}`:"none"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                   <div style={{fontWeight:700,fontSize:13,color:T.text,display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
                     {f&&<span style={{width:8,height:8,borderRadius:"50%",background:f.color,flexShrink:0}}/>}
                     <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.clientName||c.name||chatIdToPhone(c.chat_id)}</span>
                     {lead&&<span title="مربوط بليد" style={{fontSize:10}}>🔗</span>}
                   </div>
-                  <span style={{color:T.textMuted,fontSize:10,flexShrink:0}}>{timeAgo(c.lastMsgAt)}</span>
+                  <span style={{flexShrink:0,display:"flex",gap:4,alignItems:"center"}}>{slaBreach&&<span style={{color:T.danger,fontSize:9,fontWeight:800,background:"#fee2e2",borderRadius:6,padding:"1px 5px"}}>⏰ من غير رد</span>}<span style={{color:T.textMuted,fontSize:10}}>{timeAgo(c.lastMsgAt)}</span></span>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{color:T.textSoft,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{c.lastMsgText||""}</div>
@@ -1205,7 +1378,22 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
 
         {/* نافذة الشات / المفضلة */}
         <div style={{flex:1,background:T.card,borderRadius:14,boxShadow:T.shadow,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {showFavs ? (
+          {showSched ? (
+            <div style={{padding:16,overflowY:"auto"}}>
+              <p style={{fontWeight:800,fontSize:14,color:T.accent,marginBottom:14}}>⏰ الرسايل المجدولة ({schedList.length})</p>
+              {schedList.length===0&&<p style={{color:T.textMuted,fontSize:13}}>مفيش رسايل مجدولة — من زرار 💬 عند أي ليد تقدر تحدد وقت للإرسال</p>}
+              {schedList.map(s=>(
+                <div key={s.id} style={{background:T.accentBg,border:"1px solid #c7d2fe",borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:11,color:T.accent,fontWeight:800}}>📅 {String(s.sendAt).replace("T"," ")} → +{chatIdToPhone(s.chatId)}</span>
+                    <button onClick={async()=>{ if(!confirm("إلغاء الرسالة دي؟"))return; try{ await jsonpCall({action:"cancelScheduled",id:s.id}); setSchedList(p=>p.filter(x=>x.id!==s.id)); }catch(e){} }} style={{...btnGhost,padding:"3px 10px",fontSize:11,color:T.danger}}>إلغاء</button>
+                  </div>
+                  <div style={{fontSize:13,color:T.text}}>{s.text}</div>
+                  <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>بواسطة: {s.createdBy||"—"}</div>
+                </div>
+              ))}
+            </div>
+          ) : showFavs ? (
             <div style={{padding:16,overflowY:"auto"}}>
               <p style={{fontWeight:800,fontSize:14,color:"#a16207",marginBottom:14}}>⭐ الرسايل المفضلة ({favMsgs.length})</p>
               {favMsgs.length===0&&<p style={{color:T.textMuted,fontSize:13}}>معلّمتش رسايل لسه — دوس على ⭐ جنب أي رسالة مهمة</p>}
@@ -1271,6 +1459,17 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
                 <textarea value={text} onChange={e=>setText(e.target.value)} rows={1} placeholder="اكتب رسالتك..."
                   onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }}
                   style={{...inputS,flex:1,resize:"none",maxHeight:100}}/>
+                <label title="إرفاق صورة / ملف" style={{...btnGhost,padding:"10px 12px",cursor:"pointer",flexShrink:0}}>📎
+                  <input type="file" style={{display:"none"}} onChange={async e=>{
+                    const f=e.target.files[0]; e.target.value="";
+                    if(!f||!activeChat) return;
+                    setBusy(true);
+                    const res = await sendMediaRequest({instanceId:activeChat.instance_id, chatId:activeChat.chat_id, caption:text.trim(), file:f, agentName:user.name});
+                    setBusy(false);
+                    if(res.success){ setText(""); loadMessages(activeChat.chat_id,false); }
+                    else alert("❌ "+(res.error||"فشل إرسال الملف"));
+                  }}/>
+                </label>
                 <button onClick={send} disabled={busy} style={{...btnPrimary,padding:"10px 18px",opacity:busy?0.7:1,flexShrink:0}}>📤</button>
               </div>
             </>
@@ -1284,20 +1483,26 @@ function WhatsAppTab({user,instances,funnel,quickReplies,leads,onOpenLead,onCrea
 }
 
 // ════════════════ RULES TAB (المدير فقط) ════════════════
-function RulesTab({users,instances,funnel,quickReplies,onSaveUser,onSaveInstances,onSaveFunnel,onSaveQR,onDeleteQR}) {
+function RulesTab({users,instances,funnel,quickReplies,autoCfg,targets,onSaveUser,onSaveInstances,onSaveFunnel,onSaveQR,onDeleteQR,onSaveAuto}) {
   const [sub,setSub]=useState("users");
   const [edits,setEdits]=useState({});
   const [newInstId,setNewInstId]=useState("");
   const [newInstLabel,setNewInstLabel]=useState("");
   const [newFunnel,setNewFunnel]=useState({label:"",color:"#4f46e5"});
-  const [newQR,setNewQR]=useState({title:"",text:""});
+  const [newQR,setNewQR]=useState({title:"",text:"",stage:"all"});
+  const [auto,setAuto]=useState({defaultInstance:"",slaHours:2,autoRenewMsg:false,renewTemplate:""});
+  const [tgt,setTgt]=useState({});
+  const [recExp,setRecExp]=useState([]);
+  const [newRec,setNewRec]=useState({category:"مرتبات",label:"",amount:"",currency:"SAR"});
+  useEffect(()=>{ setAuto(a=>({...a,...(autoCfg||{})})); setRecExp((autoCfg&&autoCfg.recurringExpenses)||[]); },[autoCfg]);
+  useEffect(()=>{ setTgt(JSON.parse(JSON.stringify(targets||{}))); },[targets]);
 
   const getU = (u) => edits[u.id] ? edits[u.id] : u;
   const setU = (id, patch) => setEdits(prev=>({...prev,[id]:{...(prev[id]||users.find(x=>x.id===id)),...patch}}));
 
   const blankUser = () => ({ id:"u"+Date.now(), username:"", password:"", name:"", role:"sales", instances:[], perms:{}, active:true, _new:true });
 
-  const SUBS=[{id:"users",label:"👥 الموظفون والصلاحيات"},{id:"instances",label:"📱 الأرقام"},{id:"funnel",label:"🎯 حالات الفانل"},{id:"qr",label:"⚡ الردود الجاهزة"}];
+  const SUBS=[{id:"users",label:"👥 الموظفون والصلاحيات"},{id:"instances",label:"📱 الأرقام"},{id:"funnel",label:"🎯 حالات الفانل"},{id:"qr",label:"⚡ السكربتات"},{id:"auto",label:"🤖 الأتمتة والتارجت"}];
 
   return (
     <div>
@@ -1425,19 +1630,33 @@ function RulesTab({users,instances,funnel,quickReplies,onSaveUser,onSaveInstance
       {sub==="qr"&&(
         <div style={{maxWidth:640}}>
           <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
-            <p style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>➕ رد جاهز جديد (الموظف يبعته بضغطة ⚡)</p>
+            <p style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>➕ سكربت جديد (الموظف يبعته بضغطة ⚡)</p>
             <Field label="العنوان"><input value={newQR.title} onChange={e=>setNewQR(q=>({...q,title:e.target.value}))} style={inputS} placeholder="مثال: رسالة الافتتاح"/></Field>
+            <Field label="🎯 مرتبط بمرحلة (السكربت هيظهر للموظف أول حاجة لما الليد في المرحلة دي)">
+              <select value={newQR.stage} onChange={e=>setNewQR(q=>({...q,stage:e.target.value}))} style={inputS}>
+                <option value="all">🌐 عام — كل المراحل</option>
+                <optgroup label="مراحل الأوتريتش">
+                  {TELE_STAGES.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                </optgroup>
+                <optgroup label="مراحل السيلز">
+                  {SALES_STAGES.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                </optgroup>
+              </select>
+            </Field>
             <Field label="نص الرسالة"><textarea value={newQR.text} onChange={e=>setNewQR(q=>({...q,text:e.target.value}))} rows={3} style={{...inputS,resize:"vertical"}} placeholder="السلام عليكم، معاك ... من شركة معوان..."/></Field>
             <button onClick={()=>{
               if(!newQR.title.trim()||!newQR.text.trim())return;
-              onSaveQR({id:"q"+Date.now(),title:newQR.title.trim(),text:newQR.text.trim()});
-              setNewQR({title:"",text:""});
+              onSaveQR({id:"q"+Date.now(),title:newQR.title.trim(),text:newQR.text.trim(),stage:newQR.stage||"all"});
+              setNewQR({title:"",text:"",stage:"all"});
             }} style={btnPrimary}>➕ إضافة</button>
           </div>
           {quickReplies.map(q=>(
             <div key={q.id} style={{background:T.card,borderRadius:12,padding:"12px 16px",boxShadow:T.shadow,marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                <span style={{fontWeight:700,fontSize:13,color:T.text}}>⚡ {q.title}</span>
+                <span style={{fontWeight:700,fontSize:13,color:T.text}}>⚡ {q.title} {(()=>{
+                  const st = TELE_STAGES.find(s=>s.id===q.stage)||SALES_STAGES.find(s=>s.id===q.stage);
+                  return st ? <Badge label={st.icon+" "+st.label} color={st.color}/> : <Badge label="عام" color="#64748b"/>;
+                })()}</span>
                 <button onClick={()=>{ if(confirm("حذف الرد؟")) onDeleteQR(q.id); }} style={{...btnGhost,padding:"4px 10px",fontSize:12,color:T.danger}}>🗑️</button>
               </div>
               <div style={{color:T.textSoft,fontSize:12,whiteSpace:"pre-wrap"}}>{q.text}</div>
@@ -1445,7 +1664,196 @@ function RulesTab({users,instances,funnel,quickReplies,onSaveUser,onSaveInstance
           ))}
         </div>
       )}
+
+      {sub==="auto"&&(
+        <div style={{maxWidth:720}}>
+          {/* التارجت الشهري */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:4}}>🎯 التارجت الشهري لكل موظف</p>
+            <p style={{color:T.textMuted,fontSize:11,marginBottom:14}}>حدد عدد الاجتماعات والصفقات المطلوبة — هتظهر نسبة الإنجاز في الداشبورد</p>
+            {users.filter(u=>u.role!=="manager").map(u=>{
+              const t = tgt[u.id]||{};
+              return <div key={u.id} style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                <span style={{fontWeight:700,fontSize:13,color:T.text,minWidth:130}}>{u.name}</span>
+                <input type="number" placeholder="اجتماعات" value={t.meetings||""} onChange={e=>setTgt(p=>({...p,[u.id]:{...(p[u.id]||{}),meetings:e.target.value}}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+                <input type="number" placeholder="صفقات مغلقة" value={t.won||""} onChange={e=>setTgt(p=>({...p,[u.id]:{...(p[u.id]||{}),won:e.target.value}}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+              </div>;
+            })}
+          </div>
+
+          {/* الأتمتة */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:14}}>🤖 الأتمتة</p>
+            <Field label="⏱️ حد التأخير في الرد (بالساعات) — المحادثة تنور أحمر بعده">
+              <input type="number" value={auto.slaHours} onChange={e=>setAuto(a=>({...a,slaHours:Number(e.target.value)||2}))} style={{...inputS,width:120}}/>
+            </Field>
+            <Field label="📱 الرقم المستخدم في الرسايل التلقائية">
+              <select value={auto.defaultInstance||""} onChange={e=>setAuto(a=>({...a,defaultInstance:e.target.value}))} style={inputS}>
+                <option value="">— اختر —</option>
+                {instances.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
+              </select>
+            </Field>
+            <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:auto.autoRenewMsg?T.ok:T.textSoft,cursor:"pointer",marginBottom:10}}>
+              <input type="checkbox" checked={!!auto.autoRenewMsg} onChange={e=>setAuto(a=>({...a,autoRenewMsg:e.target.checked}))} style={{accentColor:T.ok,width:16,height:16}}/>
+              🔁 تفعيل رسالة التجديد التلقائية (بتتبعت قبل التجديد بـ ٣٠ و١٤ و٧ أيام)
+            </label>
+            {auto.autoRenewMsg&&(
+              <Field label="نص رسالة التجديد — استخدم {الاسم} و{التاريخ} و{القيمة}">
+                <textarea value={auto.renewTemplate||""} onChange={e=>setAuto(a=>({...a,renewTemplate:e.target.value}))} rows={3} style={{...inputS,resize:"vertical"}} placeholder="أهلاً {الاسم} 👋 نذكر حضرتك إن تجديد الاشتراك ({القيمة}) موعده {التاريخ}. يسعدنا استمرار التعاون 🌟"/>
+              </Field>
+            )}
+          </div>
+
+          {/* المصاريف المتكررة */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:4}}>🔁 المصاريف المتكررة</p>
+            <p style={{color:T.textMuted,fontSize:11,marginBottom:14}}>بتتسجل تلقائي في الحسابات أول كل شهر (مرتبات، إيجار...)</p>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap",marginBottom:12}}>
+              <select value={newRec.category} onChange={e=>setNewRec(r=>({...r,category:e.target.value}))} style={{...inputS,width:130,padding:"8px 10px",fontSize:12}}>
+                {EXPENSE_CATS.map(x=><option key={x}>{x}</option>)}
+              </select>
+              <input placeholder="الوصف" value={newRec.label} onChange={e=>setNewRec(r=>({...r,label:e.target.value}))} style={{...inputS,width:160,padding:"8px 10px",fontSize:12}}/>
+              <input type="number" placeholder="المبلغ" value={newRec.amount} onChange={e=>setNewRec(r=>({...r,amount:e.target.value}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+              <select value={newRec.currency} onChange={e=>setNewRec(r=>({...r,currency:e.target.value}))} style={{...inputS,width:80,padding:"8px 10px",fontSize:12}}>
+                <option>SAR</option><option>EGP</option><option>USD</option>
+              </select>
+              <button onClick={()=>{
+                if(!newRec.amount)return;
+                setRecExp(p=>[...p,{id:"rec"+Date.now(),...newRec}]);
+                setNewRec({category:"مرتبات",label:"",amount:"",currency:"SAR"});
+              }} style={{...btnPrimary,padding:"9px 16px"}}>➕</button>
+            </div>
+            {recExp.map(r=>(
+              <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                <span style={{fontSize:12,color:T.text}}><b>{r.category}</b> — {r.label||"—"} — <b style={{color:T.danger}}>{fmt(r.amount)} {r.currency}</b> شهرياً</span>
+                <button onClick={()=>setRecExp(p=>p.filter(x=>x.id!==r.id))} style={{...btnGhost,padding:"3px 10px",fontSize:11,color:T.danger}}>🗑️</button>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={()=>onSaveAuto&&onSaveAuto({...auto,recurringExpenses:recExp},tgt)} style={{...btnPrimary,width:"100%"}}>💾 حفظ كل إعدادات الأتمتة والتارجت</button>
+        </div>
+      )}
     </div>
+  );
+}
+
+
+// ════════════════ MEDIA HELPERS ════════════════
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1]);
+    r.onerror = () => rej(new Error("read failed"));
+    r.readAsDataURL(file);
+  });
+}
+async function sendMediaRequest({instanceId, chatId, caption, file, agentName}) {
+  if (file.size > 8*1024*1024) return { success:false, error:"أقصى حجم للملف 8 ميجا" };
+  const requestId = "req" + Date.now() + Math.random().toString(36).slice(2);
+  let data;
+  try { data = await fileToBase64(file); } catch(e){ return {success:false,error:"فشل قراءة الملف"}; }
+  try {
+    await fetch(SCRIPT_URL, {
+      method:"POST", mode:"no-cors",
+      headers:{"Content-Type":"text/plain"},
+      body: JSON.stringify({ action:"sendWAMedia", requestId, instanceId, chatId, caption:caption||"", fileName:file.name, mimeType:file.type, data, agentName })
+    });
+  } catch(e){ return {success:false,error:"فشل الاتصال بالسيرفر"}; }
+  for (let i=0;i<20;i++){
+    await new Promise(r=>setTimeout(r,2500));
+    try {
+      const res = await jsonpCall({ action:"checkRequest", id:requestId });
+      if (res.done) return res;
+    } catch(e){}
+  }
+  return { success:false, error:"استغرق الرفع وقت طويل — جرب ملف أصغر أو اعمل ريفريش وشوف المحادثة" };
+}
+
+// ════════════════ QUICK SEND MODAL (من الليد مباشرة) ════════════════
+function QuickSendModal({lead,user,instances,quickReplies,onClose,onSent}) {
+  const allowed = can.allChats(user) ? instances : instances.filter(i=>(user.instances||[]).includes(i.id));
+  const [inst,setInst]=useState(allowed[0]?.id||"");
+  const [text,setText]=useState("");
+  const [file,setFile]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [when,setWhen]=useState("");
+  const chatId = toChatId(lead.phone, lead.phoneCountry);
+
+  const doSend = async () => {
+    if (!chatId){alert("رقم العميل غير صالح");return;}
+    if (!inst){alert("اختار الرقم المُرسِل");return;}
+    if (!text.trim() && !file){alert("اكتب رسالة أو ارفق ملف");return;}
+    if (when && file){alert("الجدولة متاحة للرسايل النصية فقط — شيل الملف أو شيل الجدولة");return;}
+    setBusy(true);
+    let ok=false, summary="";
+    if (when) {
+      try {
+        const res = await jsonpCall({ action:"scheduleMessage", instanceId:inst, chatId, text:text.trim(), sendAt:when, createdBy:user.name });
+        ok = res.success; summary = "⏰ مجدولة "+when.replace("T"," ")+": "+text.trim();
+        if (!ok) alert("❌ "+(res.error||"فشل الجدولة"));
+      } catch(e){ alert("❌ مشكلة في الاتصال"); }
+    } else if (file) {
+      const res = await sendMediaRequest({instanceId:inst, chatId, caption:text.trim(), file, agentName:user.name});
+      ok = res.success; summary = (file.type.startsWith("image/")?"📷 صورة":"📎 "+file.name)+(text.trim()?" — "+text.trim():"");
+      if (!ok) alert("❌ "+(res.error||"فشل الإرسال"));
+    } else {
+      try {
+        const res = await jsonpCall({ action:"sendWA", instanceId:inst, chatId, text:text.trim(), agentId:user.id, agentName:user.name });
+        ok = res.success; summary = text.trim();
+        if (!ok) alert("❌ "+(res.error||"فشل الإرسال"));
+      } catch(e){ alert("❌ مشكلة في الاتصال"); }
+    }
+    setBusy(false);
+    if (ok) { onSent && onSent(summary); onClose(); }
+  };
+
+  return (
+    <Modal title={`💬 إرسال واتساب — ${lead.clientName||("عميل #"+lead.id)}`} onClose={onClose} maxWidth={480}>
+      <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:T.textSoft,direction:"ltr",textAlign:"right"}}>
+        {lead.phoneCountry||"+966"} {lead.phone}
+      </div>
+      {allowed.length===0
+        ? <div style={{background:T.dangerBg,borderRadius:10,padding:14,color:T.danger,fontSize:13,fontWeight:700,marginBottom:14}}>⚠️ مفيش أرقام مسموحة ليك — كلم المدير يضيفلك رقم من Rules</div>
+        : <Field label="الرقم المُرسِل">
+            <select value={inst} onChange={e=>setInst(e.target.value)} style={inputS}>
+              {allowed.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
+            </select>
+          </Field>}
+      {quickReplies.length>0 && (()=>{
+        const stageId = lead.salesStage||lead.teleStage||"";
+        const stageObj = SALES_STAGES.find(s=>s.id===stageId)||TELE_STAGES.find(s=>s.id===stageId);
+        const mine = quickReplies.filter(q=>q.stage&&q.stage!=="all"&&q.stage===stageId);
+        const general = quickReplies.filter(q=>!q.stage||q.stage==="all");
+        const other = quickReplies.filter(q=>q.stage&&q.stage!=="all"&&q.stage!==stageId);
+        return <Field label="⚡ سكربتات جاهزة">
+          <select value="" onChange={e=>{ if(e.target.value) setText(t=>t?t+" "+e.target.value:e.target.value); }} style={inputS}>
+            <option value="">— اختار سكربت —</option>
+            {mine.length>0&&<optgroup label={"🎯 سكربتات مرحلة: "+(stageObj?.label||"الحالية")}>{mine.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
+            {general.length>0&&<optgroup label="سكربتات عامة">{general.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
+            {other.length>0&&<optgroup label="مراحل تانية">{other.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
+          </select>
+        </Field>;
+      })()}
+      <Field label={file?"الرسالة (هتتبعت كتعليق مع الملف)":"الرسالة"}>
+        <textarea value={text} onChange={e=>setText(e.target.value)} rows={4} style={{...inputS,resize:"vertical"}} placeholder="اكتب رسالتك..."/>
+      </Field>
+      <Field label="⏰ جدولة الإرسال (اختياري — سيبها فاضية للإرسال الفوري)">
+        <input type="datetime-local" value={when} onChange={e=>setWhen(e.target.value)} style={inputS}/>
+      </Field>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
+        <label style={{...btnGhost,cursor:"pointer",fontSize:12}}>📎 إرفاق صورة / ملف
+          <input type="file" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
+        </label>
+        {file && <span style={{fontSize:12,color:T.accent,fontWeight:700,background:T.accentBg,padding:"5px 10px",borderRadius:8,display:"inline-flex",alignItems:"center",gap:6}}>
+          {file.type.startsWith("image/")?"📷":"📎"} {file.name.length>25?file.name.slice(0,25)+"…":file.name}
+          <button onClick={()=>setFile(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.danger,fontWeight:800}}>✕</button>
+        </span>}
+      </div>
+      <button onClick={doSend} disabled={busy||allowed.length===0} style={{...btnPrimary,width:"100%",opacity:(busy||allowed.length===0)?0.6:1}}>
+        {busy?"⏳ جارٍ الإرسال...":(when?"⏰ جدولة الإرسال":"📤 إرسال")}
+      </button>
+    </Modal>
   );
 }
 
@@ -1464,6 +1872,9 @@ function App() {
   const [quickReplies,setQuickReplies]=useState([]);
   const [usersList,setUsersList]=useState([]);
   const [waUnread,setWaUnread]=useState(0);
+  const [slaHours,setSlaHours]=useState(2);
+  const [targets,setTargets]=useState({});
+  const [autoCfg,setAutoCfg]=useState({});
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("dashboard");
   const [search,setSearch]=useState("");
@@ -1479,6 +1890,7 @@ function App() {
   const [showRenewalModal,setShowRenewalModal]=useState(false);
   const [period,setPeriod]=useState("monthly");
   const [showAlerts,setShowAlerts]=useState(false);
+  const [quickSendLead,setQuickSendLead]=useState(null);
   const [alertsShown,setAlertsShown]=useState(false);
 
   const loadAll = useCallback(async (user) => {
@@ -1494,6 +1906,9 @@ function App() {
         if (data.funnelStatuses && data.funnelStatuses.length) setFunnel(data.funnelStatuses);
         if (data.quickReplies) setQuickReplies(data.quickReplies);
         if (data.waUnread !== undefined) setWaUnread(Number(data.waUnread)||0);
+        if (data.slaHours !== undefined) setSlaHours(Number(data.slaHours)||2);
+        if (data.targets) setTargets(data.targets);
+        if (data.autoCfg) setAutoCfg(data.autoCfg);
         if (can.finance(user)) {
           setExpenses(data.expenses||[]);
           setCollections(data.collections||[]);
@@ -1552,9 +1967,15 @@ function App() {
     jsonpCall({ action:"addActivity", leadId, entry:JSON.stringify(entry), userId:currentUser.id }).catch(e=>console.error(e));
   };
   const handleSaveRenewal = (r) => {
-    setRenewals(prev=>{const i=prev.findIndex(x=>x.id===r.id);if(i>=0){const n=[...prev];n[i]=r;return n;}return[r,...prev];});
+    const renewedNow = r._renewedNow; const clean = {...r}; delete clean._renewedNow;
+    setRenewals(prev=>{const i=prev.findIndex(x=>x.id===clean.id);if(i>=0){const n=[...prev];n[i]=clean;return n;}return[clean,...prev];});
     setShowRenewalModal(false); setEditRenewal(null);
-    saveGeneric("saveRenewal","renewal",r);
+    saveGeneric("saveRenewal","renewal",clean);
+    if (renewedNow && Number(clean.contractValue||0)>0) {
+      const col = { id:"C"+Date.now(), date:today(), clientName:clean.clientName, type:"تجديد", amount:clean.contractValue, currency:clean.currency||"SAR", notes:"تسجيل تلقائي — زرار جدّد ✅", createdAt:today() };
+      setCollections(p=>[col,...p]);
+      jsonpCall({action:"saveCollection", collection:JSON.stringify(col)}).catch(e=>console.error(e));
+    }
   };
   const handleAddExpense = (x) => { setExpenses(p=>[x,...p]); saveGeneric("saveExpense","expense",x); };
   const handleEditExpense = (x) => { setExpenses(p=>p.map(e=>e.id===x.id?x:e)); saveGeneric("saveExpense","expense",x); };
@@ -1569,6 +1990,11 @@ function App() {
   };
   const handleSaveInstances = (list) => { setInstances(list); jsonpCall({action:"saveSettings",settings:JSON.stringify({instances:list})}).catch(e=>console.error(e)); };
   const handleSaveFunnel = (list) => { setFunnel(list); jsonpCall({action:"saveSettings",settings:JSON.stringify({funnelStatuses:list})}).catch(e=>console.error(e)); };
+  const handleSaveAuto = (autoObj, tgtObj) => {
+    setAutoCfg(autoObj); setTargets(tgtObj); setSlaHours(Number(autoObj.slaHours)||2);
+    jsonpCall({action:"saveSettings",settings:JSON.stringify({autoCfg:autoObj,targets:tgtObj,slaHours:Number(autoObj.slaHours)||2})})
+      .then(()=>alert("✅ تم حفظ الأتمتة والتارجت")).catch(e=>alert("❌ مشكلة في الحفظ"));
+  };
   const handleSaveQR = (q) => { setQuickReplies(p=>[...p,q]); jsonpCall({action:"saveQuickReply",qr:JSON.stringify(q)}).catch(e=>console.error(e)); };
   const handleDeleteQR = (id) => { setQuickReplies(p=>p.filter(q=>q.id!==id)); jsonpCall({action:"deleteQuickReply",id}).catch(e=>console.error(e)); };
 
@@ -1653,13 +2079,22 @@ function App() {
       </div>
 
       <div style={{padding:"20px 16px",maxWidth:1400,margin:"0 auto"}}>
-        {tab==="dashboard"&&<Dashboard leads={visibleLeads} renewals={can.renewals(currentUser)?renewals:[]} user={currentUser} period={period} setPeriod={setPeriod}/>}
+        {tab==="dashboard"&&<Dashboard leads={visibleLeads} renewals={can.renewals(currentUser)?renewals:[]} user={currentUser} period={period} setPeriod={setPeriod} targets={targets}/>}
 
         {tab==="leads"&&(
           <div>
             <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
               <h2 style={{margin:0,fontSize:17,color:T.text}}>الليدز ({filteredLeads.length})</h2>
               <div style={{flex:1}}/>
+              {currentUser.role==="manager"&&<button onClick={()=>{
+                const cols=["id","clientName","phone","phoneCountry","email","niche","source","storeUrl","teleStage","salesStage","priority","budget","currency","followUpDate","createdAt"];
+                const head=["ID","الاسم","الهاتف","الكود","الإيميل","النيتش","المصدر","المتجر","مرحلة أوتريتش","مرحلة سيلز","الأولوية","الميزانية","العملة","المتابعة","الإضافة"];
+                const rows=filteredLeads.map(l=>cols.map(k=>'"'+String(l[k]||"").replace(/"/g,'""')+'"').join(","));
+                const csv="\uFEFF"+head.join(",")+"\n"+rows.join("\n");
+                const a=document.createElement("a");
+                a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+                a.download="maawan-leads-"+today()+".csv"; a.click();
+              }} style={{...btnGhost,fontSize:12}}>⬇️ CSV</button>}
               <button onClick={()=>{setEditLead(null);setShowLeadModal(true);}} style={btnPrimary}>➕ إضافة ليد</button>
             </div>
             <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",background:T.card,padding:"12px 14px",borderRadius:12,boxShadow:T.shadow}}>
@@ -1687,7 +2122,7 @@ function App() {
                   </tr></thead>
                   <tbody>
                     {filteredLeads.length===0&&<tr><td colSpan={7} style={{padding:40,textAlign:"center",color:T.textMuted}}>{loading?"⏳ جارٍ التحميل...":"لا يوجد ليدز مطابقة"}</td></tr>}
-                    {filteredLeads.map(l=><LeadRow key={l.id} lead={l} user={currentUser} showFull={can.allLeads(currentUser)} onEdit={l=>{setEditLead(l);setShowLeadModal(true);}} onActivity={setActivityLead}/>)}
+                    {filteredLeads.map(l=><LeadRow key={l.id} lead={l} user={currentUser} showFull={can.allLeads(currentUser)} onEdit={l=>{setEditLead(l);setShowLeadModal(true);}} onActivity={setActivityLead} onQuickSend={can.whatsapp(currentUser)?setQuickSendLead:null}/>)}
                   </tbody>
                 </table>
               </div>
@@ -1725,7 +2160,7 @@ function App() {
         )}
 
         {tab==="whatsapp"&&can.whatsapp(currentUser)&&(
-          <WhatsAppTab user={currentUser} instances={instances} funnel={funnel} quickReplies={quickReplies} leads={leads}
+          <WhatsAppTab user={currentUser} instances={instances} funnel={funnel} quickReplies={quickReplies} leads={leads} slaHours={slaHours}
             onOpenLead={l=>{setEditLead(l);setShowLeadModal(true);}}
             onCreateLeadFromChat={createLeadFromChat}/>
         )}
@@ -1745,8 +2180,9 @@ function App() {
 
         {tab==="rules"&&can.rules(currentUser)&&(
           <RulesTab users={usersList} instances={instances} funnel={funnel} quickReplies={quickReplies}
+            autoCfg={autoCfg} targets={targets}
             onSaveUser={handleSaveUser} onSaveInstances={handleSaveInstances} onSaveFunnel={handleSaveFunnel}
-            onSaveQR={handleSaveQR} onDeleteQR={handleDeleteQR}/>
+            onSaveQR={handleSaveQR} onDeleteQR={handleDeleteQR} onSaveAuto={handleSaveAuto}/>
         )}
       </div>
 
@@ -1756,6 +2192,9 @@ function App() {
       }} onClose={()=>{setShowLeadModal(false);setEditLead(null);}}/>}
       {activityLead&&<ActivityModal lead={activityLead} user={currentUser} onAddActivity={handleActivity} onClose={()=>setActivityLead(null)}/>}
       {showRenewalModal&&<RenewalModal renewal={editRenewal} user={currentUser} onSave={handleSaveRenewal} onClose={()=>{setShowRenewalModal(false);setEditRenewal(null);}}/>}
+      {quickSendLead&&<QuickSendModal lead={quickSendLead} user={currentUser} instances={instances} quickReplies={quickReplies}
+        onSent={(summary)=>handleActivity(quickSendLead.id,{date:today(),agent:currentUser.name,action:"📤 واتساب: "+summary.slice(0,120)})}
+        onClose={()=>setQuickSendLead(null)}/>}
       {showAlerts&&<AlertsPopup alerts={leadAlerts} renewalAlerts={renewalAlerts} onClose={()=>setShowAlerts(false)}/>}
     </div>
   );
