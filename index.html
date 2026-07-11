@@ -1770,92 +1770,139 @@ async function sendMediaRequest({instanceId, chatId, caption, file, agentName}) 
   return { success:false, error:"استغرق الرفع وقت طويل — جرب ملف أصغر أو اعمل ريفريش وشوف المحادثة" };
 }
 
-// ════════════════ QUICK SEND MODAL (من الليد مباشرة) ════════════════
+// ════════════════ MINI CHAT MODAL (جوه الليدز مباشرة) ════════════════
 function QuickSendModal({lead,user,instances,quickReplies,onClose,onSent}) {
-  const allowed = can.allChats(user) ? instances : instances.filter(i=>(user.instances||[]).includes(i.id));
-  const [inst,setInst]=useState(allowed[0]?.id||"");
-  const [text,setText]=useState("");
-  const [file,setFile]=useState(null);
-  const [busy,setBusy]=useState(false);
-  const [when,setWhen]=useState("");
-  const chatId = toChatId(lead.phone, lead.phoneCountry);
+  const allowed  = can.allChats(user) ? instances : instances.filter(i=>(user.instances||[]).includes(i.id));
+  const instId   = allowed[0]?.id || "";
+  const chatId   = toChatId(lead.phone, lead.phoneCountry);
+  const [msgs,setMsgs]   = useState([]);
+  const [text,setText]   = useState("");
+  const [busy,setBusy]   = useState(false);
+  const [loading,setLoading] = useState(true);
+  const endRef = React.useRef(null);
 
-  const doSend = async () => {
-    if (!chatId){alert("رقم العميل غير صالح");return;}
-    if (!inst){alert("اختار الرقم المُرسِل");return;}
-    if (!text.trim() && !file){alert("اكتب رسالة أو ارفق ملف");return;}
-    if (when && file){alert("الجدولة متاحة للرسايل النصية فقط — شيل الملف أو شيل الجدولة");return;}
-    setBusy(true);
-    let ok=false, summary="";
-    if (when) {
+  // جيب المحادثة السابقة
+  useEffect(()=>{
+    if (!chatId) { setLoading(false); return; }
+    (async()=>{
       try {
-        const res = await jsonpCall({ action:"scheduleMessage", instanceId:inst, chatId, text:text.trim(), sendAt:when, createdBy:user.name });
-        ok = res.success; summary = "⏰ مجدولة "+when.replace("T"," ")+": "+text.trim();
-        if (!ok) alert("❌ "+(res.error||"فشل الجدولة"));
-      } catch(e){ alert("❌ مشكلة في الاتصال"); }
-    } else if (file) {
-      const res = await sendMediaRequest({instanceId:inst, chatId, caption:text.trim(), file, agentName:user.name});
-      ok = res.success; summary = (file.type.startsWith("image/")?"📷 صورة":"📎 "+file.name)+(text.trim()?" — "+text.trim():"");
-      if (!ok) alert("❌ "+(res.error||"فشل الإرسال"));
-    } else {
-      try {
-        const res = await jsonpCall({ action:"sendWA", instanceId:inst, chatId, text:text.trim(), agentId:user.id, agentName:user.name });
-        ok = res.success; summary = text.trim();
-        if (!ok) alert("❌ "+(res.error||"فشل الإرسال"));
-      } catch(e){ alert("❌ مشكلة في الاتصال"); }
-    }
+        const res = await jsonpCall({ action:"getMessages", chatId, markRead:"1", userId:user.id });
+        if (res.success) setMsgs(res.messages||[]);
+      } catch(e){}
+      setLoading(false);
+    })();
+  },[chatId]);
+
+  // scroll للآخر
+  useEffect(()=>{ endRef.current && endRef.current.scrollIntoView({behavior:"smooth"}); },[msgs]);
+
+  const send = async () => {
+    if (!text.trim() || !chatId || !instId) return;
+    const t = text.trim(); setText(""); setBusy(true);
+    // إضافة فورية
+    const tmp = { id:"tmp"+Date.now(), direction:"out", text:t, ts:new Date().toISOString(), agent:user.name };
+    setMsgs(p=>[...p,tmp]);
+    try {
+      const res = await jsonpCall({ action:"sendWA", instanceId:instId, chatId, text:t, agentId:user.id, agentName:user.name });
+      if (!res.success) alert("❌ "+(res.error||"فشل الإرسال"));
+      else { onSent && onSent(t); }
+    } catch(e){ alert("❌ مشكلة في الاتصال"); }
     setBusy(false);
-    if (ok) { onSent && onSent(summary); onClose(); }
   };
 
+  const onKey = e => { if ((e.ctrlKey||e.metaKey||e.shiftKey===false) && e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+
+  const stageId  = lead.salesStage||lead.teleStage||"";
+  const stageName= (SALES_STAGES.find(s=>s.id===stageId)||TELE_STAGES.find(s=>s.id===stageId))?.label||"";
+  const myScripts= quickReplies.filter(q=>q.stage===stageId);
+  const genScripts= quickReplies.filter(q=>!q.stage||q.stage==="all");
+
   return (
-    <Modal title={`💬 إرسال واتساب — ${lead.clientName||("عميل #"+lead.id)}`} onClose={onClose} maxWidth={480}>
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:T.textSoft,direction:"ltr",textAlign:"right"}}>
-        {lead.phoneCountry||"+966"} {lead.phone}
+    <div style={{position:"fixed",inset:0,background:"rgba(30,27,75,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,height:"78vh",maxHeight:640,display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(30,27,75,0.3)",overflow:"hidden"}}>
+
+        {/* هيدر */}
+        <div style={{background:T.primary,padding:"14px 18px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+          <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+            {(lead.clientName||"؟")[0]}
+          </div>
+          <div style={{flex:1,overflow:"hidden"}}>
+            <div style={{color:"#fff",fontWeight:800,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.clientName||("عميل #"+lead.id)}</div>
+            <div style={{color:"rgba(255,255,255,0.6)",fontSize:11,direction:"ltr",textAlign:"right"}}>{lead.phoneCountry||"+966"} {lead.phone} {instId&&<span style={{marginRight:6,background:"rgba(255,255,255,0.15)",padding:"1px 8px",borderRadius:10}}>📱 {allowed[0]?.label||instId}</span>}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:30,height:30,borderRadius:8,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* سكربتات سريعة */}
+        {(myScripts.length>0||genScripts.length>0) && (
+          <div style={{padding:"8px 12px",borderBottom:`1px solid ${T.cardBorder}`,display:"flex",gap:6,flexWrap:"wrap",flexShrink:0,background:"#fafbff"}}>
+            {stageName && myScripts.length>0 && <span style={{fontSize:10,color:T.textMuted,alignSelf:"center"}}>🎯 {stageName}:</span>}
+            {myScripts.map(q=>(
+              <button key={q.id} onClick={()=>setText(q.text.replace(/{الاسم}/g,lead.clientName||""))}
+                style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${T.accent}22`,background:T.accentBg,color:T.accent,fontSize:11,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
+                ⚡ {q.title}
+              </button>
+            ))}
+            {genScripts.map(q=>(
+              <button key={q.id} onClick={()=>setText(q.text.replace(/{الاسم}/g,lead.clientName||""))}
+                style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${T.cardBorder}`,background:"#fff",color:T.textSoft,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>
+                {q.title}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* الرسايل */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",background:"#f0f2f8",display:"flex",flexDirection:"column",gap:8}}>
+          {loading && <div style={{textAlign:"center",color:T.textMuted,fontSize:13,marginTop:40}}>⏳ جارٍ تحميل المحادثة...</div>}
+          {!loading && msgs.length===0 && (
+            <div style={{textAlign:"center",color:T.textMuted,fontSize:13,marginTop:40}}>
+              <div style={{fontSize:36,marginBottom:8}}>💬</div>
+              مفيش محادثات سابقة — ابعت أول رسالة!
+            </div>
+          )}
+          {msgs.map((m,i)=>{
+            const isOut = m.direction==="out";
+            return (
+              <div key={m.id||i} style={{display:"flex",justifyContent:isOut?"flex-start":"flex-end"}}>
+                <div style={{
+                  maxWidth:"78%",padding:"9px 13px",fontSize:13,lineHeight:1.55,
+                  borderRadius: isOut?"16px 16px 16px 3px":"16px 16px 3px 16px",
+                  background: isOut?T.primary:"#fff",
+                  color: isOut?"#fff":T.text,
+                  boxShadow:"0 1px 3px rgba(0,0,0,0.08)"
+                }}>
+                  <div style={{wordBreak:"break-word"}}>{m.text}</div>
+                  <div style={{fontSize:9,opacity:0.55,marginTop:4,textAlign:"left"}}>{timeAgo(m.ts)}{isOut&&m.agent?" · "+m.agent:""}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={endRef}/>
+        </div>
+
+        {/* خانة الكتابة */}
+        {!instId
+          ? <div style={{padding:14,background:"#fff",borderTop:`1px solid ${T.cardBorder}`,textAlign:"center",color:T.danger,fontSize:12,fontWeight:700}}>⚠️ مفيش رقم متصل — روح Rules وضيف Instance</div>
+          : <div style={{padding:"10px 12px",background:"#fff",borderTop:`1px solid ${T.cardBorder}`,display:"flex",gap:8,alignItems:"flex-end",flexShrink:0}}>
+              <textarea
+                value={text} onChange={e=>setText(e.target.value)} onKeyDown={onKey}
+                rows={2} placeholder="اكتب رسالتك... (Enter للإرسال، Shift+Enter لسطر جديد)"
+                autoFocus
+                style={{...inputS,flex:1,resize:"none",maxHeight:90,fontSize:13,borderRadius:12,padding:"10px 14px"}}/>
+              <button onClick={send} disabled={busy||!text.trim()} style={{
+                width:42,height:42,borderRadius:12,border:"none",cursor:"pointer",flexShrink:0,fontSize:18,
+                background:text.trim()?T.primary:"#e5e7f0",color:text.trim()?"#fff":T.textMuted,
+                opacity:busy?0.6:1,display:"flex",alignItems:"center",justifyContent:"center"
+              }}>{busy?"⏳":"📤"}</button>
+            </div>
+        }
       </div>
-      {allowed.length===0
-        ? <div style={{background:T.dangerBg,borderRadius:10,padding:14,color:T.danger,fontSize:13,fontWeight:700,marginBottom:14}}>⚠️ مفيش أرقام مسموحة ليك — كلم المدير يضيفلك رقم من Rules</div>
-        : <Field label="الرقم المُرسِل">
-            <select value={inst} onChange={e=>setInst(e.target.value)} style={inputS}>
-              {allowed.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
-            </select>
-          </Field>}
-      {quickReplies.length>0 && (()=>{
-        const stageId = lead.salesStage||lead.teleStage||"";
-        const stageObj = SALES_STAGES.find(s=>s.id===stageId)||TELE_STAGES.find(s=>s.id===stageId);
-        const mine = quickReplies.filter(q=>q.stage&&q.stage!=="all"&&q.stage===stageId);
-        const general = quickReplies.filter(q=>!q.stage||q.stage==="all");
-        const other = quickReplies.filter(q=>q.stage&&q.stage!=="all"&&q.stage!==stageId);
-        return <Field label="⚡ سكربتات جاهزة">
-          <select value="" onChange={e=>{ if(e.target.value) setText(t=>t?t+" "+e.target.value:e.target.value); }} style={inputS}>
-            <option value="">— اختار سكربت —</option>
-            {mine.length>0&&<optgroup label={"🎯 سكربتات مرحلة: "+(stageObj?.label||"الحالية")}>{mine.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
-            {general.length>0&&<optgroup label="سكربتات عامة">{general.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
-            {other.length>0&&<optgroup label="مراحل تانية">{other.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}</optgroup>}
-          </select>
-        </Field>;
-      })()}
-      <Field label={file?"الرسالة (هتتبعت كتعليق مع الملف)":"الرسالة"}>
-        <textarea value={text} onChange={e=>setText(e.target.value)} rows={4} style={{...inputS,resize:"vertical"}} placeholder="اكتب رسالتك..."/>
-      </Field>
-      <Field label="⏰ جدولة الإرسال (اختياري — سيبها فاضية للإرسال الفوري)">
-        <input type="datetime-local" value={when} onChange={e=>setWhen(e.target.value)} style={inputS}/>
-      </Field>
-      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
-        <label style={{...btnGhost,cursor:"pointer",fontSize:12}}>📎 إرفاق صورة / ملف
-          <input type="file" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
-        </label>
-        {file && <span style={{fontSize:12,color:T.accent,fontWeight:700,background:T.accentBg,padding:"5px 10px",borderRadius:8,display:"inline-flex",alignItems:"center",gap:6}}>
-          {file.type.startsWith("image/")?"📷":"📎"} {file.name.length>25?file.name.slice(0,25)+"…":file.name}
-          <button onClick={()=>setFile(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.danger,fontWeight:800}}>✕</button>
-        </span>}
-      </div>
-      <button onClick={doSend} disabled={busy||allowed.length===0} style={{...btnPrimary,width:"100%",opacity:(busy||allowed.length===0)?0.6:1}}>
-        {busy?"⏳ جارٍ الإرسال...":(when?"⏰ جدولة الإرسال":"📤 إرسال")}
-      </button>
-    </Modal>
+    </div>
   );
 }
+
 
 // ════════════════ MAIN APP ════════════════
 function App() {
