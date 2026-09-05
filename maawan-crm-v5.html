@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Falak CRM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f4f5fa; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #e8eaf2; }
+  ::-webkit-scrollbar-thumb { background: #1e1b4b; border-radius: 3px; }
+  input::placeholder, textarea::placeholder { color: #9ca3af; }
+  select option { background: #fff; color: #1e293b; }
+  a { text-decoration: none; }
+  @media (max-width: 768px) {
+    .hide-mobile { display: none !important; }
+    .header-tabs { overflow-x: auto; }
+    .stat-cards { flex-direction: column; }
+    .wa-layout { flex-direction: column !important; }
+    .wa-list-panel { width: 100% !important; max-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+// ════════════════ CONFIG ════════════════
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3AC-GclAUEUBZ2KF979nWBmSLKizR826gRWtdv0u8qFWjW2WRH8lNNW6f9Te-GJxD/exec";
+
+// حساب طوارئ لو السيرفر وقع (المدير فقط)
+const FALLBACK_MANAGER = { id:"mgr1", username:"mohamed", password:"Maawan@2025", role:"manager", name:"محمد", instances:[], perms:{} };
+
+// USERS بتتحمل من الشيت بعد الدخول — دي قائمة عرض مؤقتة
+let USERS = [ FALLBACK_MANAGER ];
+
+// ════════════════ ROLES & PERMISSIONS ════════════════
+const ROLES = {
+  manager:            { label:"المدير العام" },
+  sales_manager:      { label:"Sales Manager" },
+  am_team_leader:     { label:"AM Team Leader" },
+  team_leader_sales:  { label:"Team Leader Sales" },
+  account_manager:    { label:"Account Manager" },
+  sales:              { label:"Sales" },
+  outreach:           { label:"Outreach Specialist" },
+};
+
+const PERM_DEFS = [
+  { key:"allLeads",  label:"يشوف كل الليدز" },
+  { key:"whatsapp",  label:"يستخدم الواتساب" },
+  { key:"allChats",  label:"يشوف كل المحادثات" },
+  { key:"renewals",  label:"يشوف التجديدات" },
+  { key:"finance",   label:"يشوف الحسابات" },
+];
+
+const roleDefault = {
+  allLeads:  r => ["manager","sales_manager","team_leader_sales"].includes(r),
+  whatsapp:  r => true,
+  allChats:  r => r==="manager",
+  renewals:  r => ["manager","sales_manager","account_manager","am_team_leader"].includes(r),
+  finance:   r => r==="manager",
+};
+
+const can = {};
+Object.keys(roleDefault).forEach(k => {
+  can[k] = u => (u?.perms && u.perms[k] !== undefined && u.perms[k] !== "") ? !!u.perms[k] : roleDefault[k](u?.role);
+});
+can.seeAllRenewals = u => can.allChats(u) || ["manager","sales_manager","am_team_leader"].includes(u?.role);
+can.rules = u => u?.role === "manager";
+
+// ════════════════ CONSTANTS ════════════════
+const TELE_STAGES = [
+  { id:"new_lead",       label:"ليد جديد",       color:"#4f46e5", icon:"🎯" },
+  { id:"data_collected", label:"داتا متجمعة",    color:"#7c3aed", icon:"📋" },
+  { id:"classified",     label:"مُصنَّف",         color:"#8b5cf6", icon:"🏷️" },
+  { id:"first_call",     label:"مكالمة أولى",    color:"#d97706", icon:"📞" },
+  { id:"follow_up_1",    label:"متابعة ١",       color:"#ea580c", icon:"🔄" },
+  { id:"follow_up_2",    label:"متابعة ٢",       color:"#dc2626", icon:"🔁" },
+  { id:"meeting_booked", label:"اجتماع محجوز",  color:"#059669", icon:"📅" },
+  { id:"no_answer",      label:"لا يرد",         color:"#6b7280", icon:"📵" },
+  { id:"not_interested", label:"مش مهتم",        color:"#374151", icon:"❌" },
+];
+const SALES_STAGES = [
+  { id:"meeting_held",  label:"اجتماع عُقد",    color:"#4f46e5", icon:"🤝" },
+  { id:"proposal_sent", label:"عرض أُرسل",      color:"#7c3aed", icon:"📄" },
+  { id:"negotiation",   label:"تفاوض",          color:"#d97706", icon:"⚖️" },
+  { id:"follow_up_s1",  label:"متابعة سيلز ١", color:"#ea580c", icon:"🔄" },
+  { id:"follow_up_s2",  label:"متابعة سيلز ٢", color:"#f59e0b", icon:"🔁" },
+  { id:"follow_up_s3",  label:"متابعة سيلز ٣", color:"#eab308", icon:"♻️" },
+  { id:"won",           label:"صفقة مُغلقة ✅", color:"#059669", icon:"🏆" },
+  { id:"lost",          label:"خسرنا",          color:"#dc2626", icon:"💔" },
+];
+const NICHES = ["صيدليات / صحة","ملابس","إلكترونيات","مطاعم / أكل","عيادات / طب","مستحضرات تجميل","أم وطفل","رياضة","أثاث / ديكور","تعليم","عقارات","أخرى"];
+const SOURCES = ["سكرابر سلة","إحالة","سوشيال ميديا","جوجل","معرض","لينكدإن","واتساب","أخرى"];
+const POSITIONS_DM = ["المالك","المدير العام","مدير التسويق","مدير المبيعات","مدير العمليات","شريك","أخرى"];
+const PRIORITY_COLOR = { high:"#dc2626", medium:"#d97706", low:"#059669" };
+const PRIORITY_LABEL = { high:"عالي", medium:"متوسط", low:"منخفض" };
+const CYCLES = [ {v:1,l:"شهري"}, {v:3,l:"كل ٣ شهور"}, {v:6,l:"كل ٦ شهور"}, {v:12,l:"سنوي"} ];
+const EXPENSE_CATS = ["مرتبات","إيجارات","أوبريشنز","أدوات وسوفتوير","إعلانات","مواصلات","أخرى"];
+const DEFAULT_FUNNEL = [
+  { id:"interested",     label:"مهتم",          color:"#059669" },
+  { id:"not_interested", label:"غير مهتم",      color:"#dc2626" },
+  { id:"follow_up",      label:"محتاج متابعة",  color:"#d97706" },
+  { id:"meeting",        label:"اجتماع محجوز", color:"#4f46e5" },
+  { id:"no_answer",      label:"لا يرد",        color:"#6b7280" },
+];
+
+// ════════════════ THEME ════════════════
+const T = {
+  bg:"#f4f5fa", card:"#ffffff", cardBorder:"#e5e7f0",
+  text:"#1e293b", textSoft:"#64748b", textMuted:"#94a3b8",
+  primary:"#1e1b4b", primarySoft:"#312e81",
+  accent:"#4f46e5", accentBg:"#eef2ff",
+  danger:"#dc2626", dangerBg:"#fef2f2",
+  warn:"#d97706", warnBg:"#fffbeb",
+  ok:"#059669", okBg:"#ecfdf5",
+  shadow:"0 1px 3px rgba(30,27,75,0.08), 0 4px 12px rgba(30,27,75,0.05)",
+};
+
+// ════════════════ UTILS ════════════════
+const fmt = n => Number(n||0).toLocaleString("ar-SA");
+const today = () => new Date().toISOString().split("T")[0];
+const thisMonth = () => new Date().toISOString().slice(0,7);
+const normPhone = p => String(p||"").replace(/\D/g,"").replace(/^0+/,"");
+const waLink = (phone, country) => {
+  const p = normPhone(phone);
+  if (!p) return null;
+  const code = country === "+20" ? "20" : "966";
+  return "https://wa.me/" + code + p;
+};
+const toChatId = (phone, country) => {
+  const p = normPhone(phone);
+  if (!p) return null;
+  const code = country === "+20" ? "20" : "966";
+  return code + p + "@c.us";
+};
+const chatIdToPhone = cid => String(cid||"").replace("@c.us","").replace("@s.whatsapp.net","");
+const timeAgo = ts => {
+  if (!ts) return "";
+  const d = new Date(ts); if (isNaN(d)) return "";
+  const mins = Math.floor((Date.now()-d)/60000);
+  if (mins<1) return "الآن";
+  if (mins<60) return mins+" د";
+  if (mins<1440) return Math.floor(mins/60)+" س";
+  return d.toLocaleDateString("ar-EG",{day:"numeric",month:"short"});
+};
+const daysUntil = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const n = new Date(); n.setHours(0,0,0,0);
+  return Math.round((d - n) / 86400000);
+};
+const addMonths = (dateStr, months) => {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + Number(months));
+  return d.toISOString().split("T")[0];
+};
+function getPeriodItems(items, period, dateKey) {
+  const now = new Date();
+  return items.filter(l => {
+    const d = new Date(l[dateKey||"createdAt"]);
+    if (isNaN(d)) return false;
+    if (period==="daily")   return d.toDateString()===now.toDateString();
+    if (period==="weekly")  return (now-d)<=7*86400000;
+    if (period==="monthly") return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+    if (period==="quarter") return Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3)&&d.getFullYear()===now.getFullYear();
+    if (period==="half")    return (now-d)<=182*86400000;
+    if (period==="yearly")  return d.getFullYear()===now.getFullYear();
+    return true;
+  });
+}
+
+// ════════════════ JSONP (global) ════════════════
+function jsonpCall(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error("timeout"));
+    }, 25000);
+    window[cbName] = (data) => {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+    const qs = new URLSearchParams({...params, callback: cbName}).toString();
+    script.src = SCRIPT_URL + "?" + qs;
+    script.onerror = () => { clearTimeout(timeout); reject(new Error("network")); };
+    document.head.appendChild(script);
+  });
+}
+
+// تنبيهات المواعيد
+function getLeadAlerts(lead) {
+  const alerts = [];
+  const checks = [
+    { key:"meetingDate",  label:"اجتماع",    icon:"📅" },
+    { key:"proposalDate", label:"إرسال عرض", icon:"📄" },
+    { key:"closingDate",  label:"تقفيل عقد", icon:"✍️" },
+    { key:"followUpDate", label:"متابعة",    icon:"🔄" },
+  ];
+  checks.forEach(c => {
+    const du = daysUntil(lead[c.key]);
+    if (du === null) return;
+    if (["won","lost"].includes(lead.salesStage)) return;
+    if (du < 0)       alerts.push({ ...c, days:du, level:"overdue", text:`${c.icon} ${c.label} متأخر ${Math.abs(du)} يوم — ${lead.clientName||("عميل #"+lead.id)}` });
+    else if (du === 0) alerts.push({ ...c, days:du, level:"today",  text:`${c.icon} ${c.label} اليوم — ${lead.clientName||("عميل #"+lead.id)}` });
+    else if (du === 1) alerts.push({ ...c, days:du, level:"soon",   text:`${c.icon} ${c.label} بكرة — ${lead.clientName||("عميل #"+lead.id)}` });
+  });
+  return alerts;
+}
+function getRenewalAlert(r) {
+  if (r.status !== "active") return null;
+  const du = daysUntil(r.nextRenewalDate);
+  if (du === null) return null;
+  if (du < 0)   return { level:"overdue", days:du, color:T.danger, bg:T.dangerBg, text:`⚠️ تجديد ${r.clientName} متأخر ${Math.abs(du)} يوم!` };
+  if (du <= 7)  return { level:"week",    days:du, color:T.danger, bg:T.dangerBg, text:`🔴 تجديد ${r.clientName} بعد ${du} يوم` };
+  if (du <= 14) return { level:"twoweeks",days:du, color:T.warn,   bg:T.warnBg,   text:`🟠 تجديد ${r.clientName} بعد ${du} يوم` };
+  if (du <= 30) return { level:"month",   days:du, color:"#ca8a04", bg:"#fefce8", text:`🟡 تجديد ${r.clientName} بعد ${du} يوم` };
+  return null;
+}
+
+// ════════════════ SHARED UI ════════════════
+const inputS = { width:"100%", boxSizing:"border-box", padding:"10px 12px", borderRadius:8, border:`1px solid ${T.cardBorder}`, background:"#fff", color:T.text, fontSize:13, outline:"none", direction:"rtl", fontFamily:"inherit" };
+const btnPrimary = { padding:"10px 22px", borderRadius:8, border:"none", background:T.primary, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 };
+const btnGhost = { padding:"9px 18px", borderRadius:8, border:`1px solid ${T.cardBorder}`, background:"#fff", color:T.textSoft, cursor:"pointer", fontSize:13 };
+
+function Badge({label,color}) {
+  return <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,background:color+"15",color,fontSize:11,fontWeight:600,border:`1px solid ${color}33`}}>{label}</span>;
+}
+function StatCard({label,value,sub,color=T.accent,icon}) {
+  return (
+    <div style={{background:T.card,borderRadius:14,padding:"18px 22px",borderRight:`4px solid ${color}`,flex:1,minWidth:150,boxShadow:T.shadow}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div>
+          <div style={{color:T.textSoft,fontSize:12,marginBottom:6}}>{label}</div>
+          <div style={{color:T.text,fontSize:26,fontWeight:800}}>{value}</div>
+          {sub && <div style={{color,fontSize:11,marginTop:4,fontWeight:600}}>{sub}</div>}
+        </div>
+        <div style={{fontSize:26}}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+function Field({label,children}) {
+  return <div style={{marginBottom:13}}>
+    <label style={{color:T.textSoft,fontSize:12,display:"block",marginBottom:5,fontWeight:600}}>{label}</label>
+    {children}
+  </div>;
+}
+function Modal({title,onClose,children,maxWidth=680}) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(30,27,75,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:12}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:16,padding:"22px 24px",width:"100%",maxWidth,maxHeight:"92vh",overflowY:"auto",direction:"rtl",boxShadow:"0 20px 60px rgba(30,27,75,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <h2 style={{color:T.text,margin:0,fontSize:17}}>{title}</h2>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",color:T.textSoft,fontSize:16,cursor:"pointer",borderRadius:8,width:32,height:32}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function WhatsAppBtn({phone,country,size=12}) {
+  const link = waLink(phone,country);
+  if (!link) return null;
+  return <a href={link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+    style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:6,background:"#dcfce7",color:"#15803d",fontSize:size,fontWeight:700,border:"1px solid #bbf7d0"}}>
+    💬 واتساب
+  </a>;
+}
+function PhoneInput({phone,country,onPhone,onCountry}) {
+  return <div style={{display:"flex",gap:6}}>
+    <select value={country||"+966"} onChange={e=>onCountry(e.target.value)} style={{...inputS,width:90,flexShrink:0,direction:"ltr",textAlign:"center"}}>
+      <option value="+966">🇸🇦 +966</option>
+      <option value="+20">🇪🇬 +20</option>
+    </select>
+    <input value={phone||""} onChange={e=>onPhone(e.target.value)} placeholder="5XXXXXXXX" type="tel" style={{...inputS,direction:"ltr"}}/>
+  </div>;
+}
+
+// ════════════════ LOGIN (من الشيت + تذكرني + فولباك) ════════════════
+function LoginScreen({onLogin}) {
+  const saved = (()=>{ try { return JSON.parse(localStorage.getItem("maawan_creds")||"null"); } catch(e){ return null; } })();
+  const [u,setU]=useState(saved?.u||"");
+  const [p,setP]=useState(saved?.p||"");
+  const [remember,setRemember]=useState(!!saved);
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const handle = async () => {
+    setBusy(true); setErr("");
+    let user = null;
+    try {
+      const res = await jsonpCall({ action:"login", username:u, password:p });
+      if (res.success && res.user) user = res.user;
+      else if (res.error) setErr(res.error);
+    } catch(e) {
+      // فولباك طوارئ: حساب المدير المدمج
+      if (u===FALLBACK_MANAGER.username && p===FALLBACK_MANAGER.password) user = FALLBACK_MANAGER;
+      else setErr("مشكلة في الاتصال بالسيرفر — جرب تاني");
+    }
+    if (!user && !err) setErr("اسم المستخدم أو كلمة المرور غلط");
+    if (user) {
+      if (remember) { try { localStorage.setItem("maawan_creds", JSON.stringify({u,p})); } catch(e){} }
+      else { try { localStorage.removeItem("maawan_creds"); } catch(e){} }
+      onLogin(user);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#eef2ff 0%,#f4f5fa 50%,#fdf4ff 100%)",padding:16}}>
+      <div style={{background:"#fff",border:`1px solid ${T.cardBorder}`,borderRadius:20,padding:"44px 36px",width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 20px 60px rgba(30,27,75,0.12)"}}>
+        <div style={{fontSize:44,marginBottom:6}}>🏢</div>
+        <h1 style={{color:T.primary,fontSize:24,fontWeight:800,margin:"0 0 4px"}}>Falak CRM</h1>
+        <p style={{color:T.textSoft,fontSize:13,margin:"0 0 28px"}}>Sales · Renewals · Finance · WhatsApp</p>
+        {err && <div style={{background:T.dangerBg,border:`1px solid #fecaca`,borderRadius:8,padding:"10px 14px",color:T.danger,fontSize:13,marginBottom:14}}>{err}</div>}
+        <input value={u} onChange={e=>setU(e.target.value)} placeholder="اسم المستخدم" style={{...inputS,marginBottom:10,padding:"12px 14px"}}/>
+        <input value={p} onChange={e=>setP(e.target.value)} type="password" placeholder="كلمة المرور" onKeyDown={e=>e.key==="Enter"&&handle()} style={{...inputS,marginBottom:12,padding:"12px 14px"}}/>
+        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:T.textSoft,marginBottom:16,cursor:"pointer",justifyContent:"flex-start"}}>
+          <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} style={{width:16,height:16,accentColor:T.primary}}/>
+          تذكرني — احفظ بيانات الدخول
+        </label>
+        <button onClick={handle} disabled={busy} style={{...btnPrimary,width:"100%",padding:"13px",fontSize:15,opacity:busy?0.7:1}}>{busy?"⏳ جارٍ الدخول...":"دخول"}</button>
+        <p style={{color:T.textMuted,fontSize:11,marginTop:22}}>© 2026 Falak Agency</p>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════ ALERTS POPUP ════════════════
+function AlertsPopup({alerts,renewalAlerts,onClose}) {
+  const all = [...alerts, ...renewalAlerts];
+  if (all.length===0) return null;
+  return (
+    <Modal title="🔔 تنبيهات مهمة النهارده" onClose={onClose} maxWidth={480}>
+      <div style={{maxHeight:400,overflowY:"auto"}}>
+        {alerts.map((a,i)=>(
+          <div key={"l"+i} style={{padding:"11px 14px",borderRadius:10,marginBottom:8,fontSize:13,fontWeight:600,
+            background: a.level==="overdue"?T.dangerBg : a.level==="today"?T.warnBg : T.accentBg,
+            color: a.level==="overdue"?T.danger : a.level==="today"?T.warn : T.accent,
+            border:`1px solid ${a.level==="overdue"?"#fecaca":a.level==="today"?"#fde68a":"#c7d2fe"}`}}>
+            {a.text}
+          </div>
+        ))}
+        {renewalAlerts.map((a,i)=>(
+          <div key={"r"+i} style={{padding:"11px 14px",borderRadius:10,marginBottom:8,fontSize:13,fontWeight:600,background:a.bg,color:a.color,border:`1px solid ${a.color}33`}}>
+            {a.text}
+          </div>
+        ))}
+      </div>
+      <button onClick={onClose} style={{...btnPrimary,width:"100%",marginTop:12}}>تمام، فهمت ✅</button>
+    </Modal>
+  );
+}
+
+// ════════════════ LEAD MODAL (موسّع) ════════════════
+function LeadModal({lead,user,allLeads,onSave,onClose}) {
+  const isNew = !lead;
+  const blank = {
+    id:Date.now().toString(), clientName:"", phone:"", phoneCountry:"+966", email:"",
+    niche:"", storeUrl:"", storeNeeds:"", storeAnalysis:"", solutionPlan:"",
+    teleStage:"new_lead", salesStage:null,
+    teleAgent:user.role==="outreach"?user.id:"", salesAgent:user.role==="sales"?user.id:"",
+    priority:"medium", source:"", budget:"", currency:"SAR", notes:"",
+    followUpDate:today(), meetingDate:"", proposalDate:"", closingDate:"",
+    dmName:"", dmPhone:"", dmPhoneCountry:"+966", dmPosition:"",
+    contractUrl:"", reportUrls:"",
+    createdAt:today(), updatedAt:today(), activityLog:[]
+  };
+  const [form,setForm]=useState(lead?{...blank,...lead}:blank);
+  const [dupWarn,setDupWarn]=useState("");
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const checkDuplicate = () => {
+    const myPhone = normPhone(form.phone);
+    if (!myPhone) return null;
+    return (allLeads||[]).find(l => l.id !== form.id && normPhone(l.phone) === myPhone);
+  };
+
+  const handleSave = () => {
+    if (!form.clientName||!form.phone){ setDupWarn("⚠️ اسم العميل والرقم مطلوبين"); return; }
+    const dup = checkDuplicate();
+    if (dup) {
+      setDupWarn(`🚫 الليد مكرر! الرقم ده موجود بالفعل مع العميل "${dup.clientName}" (ID: ${dup.id}) — مش هينفع يتحفظ`);
+      return;
+    }
+    const log=[...(form.activityLog||[])];
+    if (isNew) log.push({date:today(),agent:user.name,action:"تم إضافة الليد"});
+    onSave({...form,updatedAt:today(),activityLog:log});
+  };
+
+  const sel=(lbl,key,opts)=>(
+    <Field label={lbl}>
+      <select value={form[key]||""} onChange={e=>set(key,e.target.value)} style={inputS}>
+        <option value="">— اختر —</option>
+        {opts.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+      </select>
+    </Field>
+  );
+  const inp=(lbl,key,type="text",ph="")=>(
+    <Field label={lbl}><input type={type} value={form[key]||""} onChange={e=>set(key,e.target.value)} placeholder={ph} style={inputS}/></Field>
+  );
+  const ta=(lbl,key,rows=2)=>(
+    <Field label={lbl}><textarea value={form[key]||""} onChange={e=>set(key,e.target.value)} rows={rows} style={{...inputS,resize:"vertical"}}/></Field>
+  );
+  const secStyle = (bg,border) => ({background:bg,borderRadius:12,padding:16,marginBottom:14,border:`1px solid ${border}`});
+  const secTitle = (color,txt) => <p style={{color,fontSize:12,margin:"0 0 12px",fontWeight:700}}>{txt}</p>;
+  const grid2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"0 14px"};
+
+  return (
+    <Modal title={isNew?"➕ إضافة ليد جديد":"✏️ تعديل بيانات العميل"} onClose={onClose} maxWidth={720}>
+      {dupWarn && <div style={{background:T.dangerBg,border:"1px solid #fecaca",borderRadius:10,padding:"12px 14px",color:T.danger,fontSize:13,fontWeight:700,marginBottom:14}}>{dupWarn}</div>}
+
+      <div style={secStyle(T.accentBg,"#c7d2fe")}>
+        {secTitle(T.accent,"📋 البيانات الأساسية")}
+        <div style={grid2}>
+          {inp("اسم العميل / المتجر","clientName","text","اسم العميل")}
+          <Field label="رقم الهاتف (الرسمي)">
+            <PhoneInput phone={form.phone} country={form.phoneCountry} onPhone={v=>set("phone",v)} onCountry={v=>set("phoneCountry",v)}/>
+          </Field>
+          {inp("الإيميل","email","email","example@mail.com")}
+          {inp("رابط المتجر","storeUrl","text","store.salla.sa")}
+          {sel("النيتش","niche",NICHES)}
+          {sel("المصدر","source",SOURCES)}
+          {sel("الأولوية","priority",[{value:"high",label:"🔴 عالي"},{value:"medium",label:"🟡 متوسط"},{value:"low",label:"🟢 منخفض"}])}
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
+            {inp("الميزانية","budget","number","0000")}
+            {sel("العملة","currency",["SAR","EGP","USD"])}
+          </div>
+        </div>
+      </div>
+
+      <div style={secStyle("#fdf4ff","#f5d0fe")}>
+        {secTitle("#a21caf","👤 متخذ القرار")}
+        <div style={grid2}>
+          {inp("الاسم","dmName","text","اسم متخذ القرار")}
+          <Field label="رقمه">
+            <PhoneInput phone={form.dmPhone} country={form.dmPhoneCountry} onPhone={v=>set("dmPhone",v)} onCountry={v=>set("dmPhoneCountry",v)}/>
+          </Field>
+          {sel("البوزيشن","dmPosition",POSITIONS_DM)}
+        </div>
+      </div>
+
+      <div style={secStyle("#f0f9ff","#bae6fd")}>
+        {secTitle("#0369a1","🔍 تحليل المتجر والخدمات")}
+        {ta("ما يحتاجه المتجر","storeNeeds")}
+        {ta("تحليل المتجر","storeAnalysis")}
+        {ta("خطة الحلول","solutionPlan")}
+        {ta("ملاحظات","notes")}
+      </div>
+
+      <div style={secStyle(T.warnBg,"#fde68a")}>
+        {secTitle(T.warn,"⏰ المواعيد — كل حاجة لازم بموعد!")}
+        <div style={grid2}>
+          {inp("موعد المتابعة القادمة","followUpDate","date")}
+          {inp("موعد الاجتماع","meetingDate","date")}
+          {inp("موعد إرسال العرض","proposalDate","date")}
+          {inp("موعد تقفيل العقد","closingDate","date")}
+        </div>
+      </div>
+
+      <div style={secStyle(T.okBg,"#a7f3d0")}>
+        {secTitle(T.ok,"🔄 البايبلاين والمسؤولين")}
+        <div style={grid2}>
+          {sel("مرحلة الأوتريتش","teleStage",TELE_STAGES.map(s=>({value:s.id,label:`${s.icon} ${s.label}`})))}
+          {sel("مرحلة السيلز","salesStage",[{value:"",label:"— لم يبدأ —"},...SALES_STAGES.map(s=>({value:s.id,label:`${s.icon} ${s.label}`}))])}
+          {sel("الأوتريتش المسؤول","teleAgent",USERS.filter(u=>u.role==="outreach").map(u=>({value:u.id,label:u.name})))}
+          {sel("السيلز المسؤول","salesAgent",[{value:"",label:"— لم يُعيَّن —"},...USERS.filter(u=>["sales","team_leader_sales","sales_manager"].includes(u.role)).map(u=>({value:u.id,label:u.name}))])}
+        </div>
+      </div>
+
+      <div style={secStyle("#f8fafc","#e2e8f0")}>
+        {secTitle(T.textSoft,"📎 مرفقات (روابط جوجل درايف)")}
+        {inp("رابط العقد","contractUrl","url","https://drive.google.com/...")}
+        {ta("روابط التقارير (رابط في كل سطر)","reportUrls",2)}
+      </div>
+
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={btnGhost}>إلغاء</button>
+        <button onClick={handleSave} style={btnPrimary}>💾 حفظ</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════ ACTIVITY MODAL ════════════════
+function ActivityModal({lead,user,onAddActivity,onClose}) {
+  const [action,setAction]=useState("");
+  const add = () => {
+    if (!action.trim()) return;
+    onAddActivity(lead.id,{date:today(),agent:user.name,action});
+    setAction("");
+  };
+  return (
+    <Modal title={`📝 سجل متابعة — ${lead.clientName}`} onClose={onClose} maxWidth={500}>
+      <div style={{maxHeight:280,overflowY:"auto",marginBottom:14}}>
+        {(lead.activityLog||[]).length===0 && <p style={{color:T.textMuted,textAlign:"center",fontSize:13,padding:20}}>لا يوجد سجل بعد</p>}
+        {[...(lead.activityLog||[])].reverse().map((a,i)=>(
+          <div key={i} style={{borderRight:`3px solid ${T.accent}`,paddingRight:12,marginBottom:12,background:"#fafbff",borderRadius:"0 8px 8px 0",padding:"8px 12px"}}>
+            <div style={{color:T.textMuted,fontSize:11}}>{a.date} — {a.agent}</div>
+            <div style={{color:T.text,fontSize:13,marginTop:3}}>{a.action}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={action} onChange={e=>setAction(e.target.value)} placeholder="اكتب إجراء أو ملاحظة..." onKeyDown={e=>e.key==="Enter"&&add()} style={{...inputS,flex:1}}/>
+        <button onClick={add} style={btnPrimary}>إضافة</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════ RENEWAL MODAL ════════════════
+function RenewalModal({renewal,user,onSave,onClose}) {
+  const isNew = !renewal;
+  const blank = {
+    id:"R"+Date.now(), clientName:"", phone:"", phoneCountry:"+966",
+    contractValue:"", currency:"SAR", cycle:1,
+    startDate:today(), nextRenewalDate:addMonths(today(),1),
+    contractUrl:"", reportUrls:"", accountManager:user.role==="account_manager"?user.id:"",
+    status:"active", notes:"", createdAt:today(), updatedAt:today()
+  };
+  const [form,setForm]=useState(renewal?{...blank,...renewal}:blank);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const handleCycleOrStart = (key,val) => {
+    const next = {...form,[key]:val};
+    if (next.startDate && next.cycle) next.nextRenewalDate = addMonths(next.startDate, next.cycle);
+    setForm(next);
+  };
+
+  const markRenewed = () => {
+    const next = addMonths(form.nextRenewalDate||today(), form.cycle);
+    setForm(f=>({...f, nextRenewalDate:next, status:"active", _renewedNow:true}));
+  };
+
+  const handleSave = () => {
+    if (!form.clientName){alert("اسم العميل مطلوب");return;}
+    onSave({...form,updatedAt:today()});
+  };
+
+  const grid2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"0 14px"};
+  return (
+    <Modal title={isNew?"➕ عقد جديد للتجديدات":"✏️ تعديل عقد"} onClose={onClose} maxWidth={640}>
+      <div style={grid2}>
+        <Field label="اسم العميل"><input value={form.clientName} onChange={e=>set("clientName",e.target.value)} style={inputS}/></Field>
+        <Field label="رقم الهاتف">
+          <PhoneInput phone={form.phone} country={form.phoneCountry} onPhone={v=>set("phone",v)} onCountry={v=>set("phoneCountry",v)}/>
+        </Field>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
+          <Field label="قيمة العقد"><input type="number" value={form.contractValue} onChange={e=>set("contractValue",e.target.value)} style={inputS}/></Field>
+          <Field label="العملة">
+            <select value={form.currency} onChange={e=>set("currency",e.target.value)} style={inputS}>
+              <option>SAR</option><option>EGP</option><option>USD</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="دورة الدفع">
+          <select value={form.cycle} onChange={e=>handleCycleOrStart("cycle",Number(e.target.value))} style={inputS}>
+            {CYCLES.map(c=><option key={c.v} value={c.v}>{c.l}</option>)}
+          </select>
+        </Field>
+        <Field label="تاريخ بداية العقد"><input type="date" value={form.startDate} onChange={e=>handleCycleOrStart("startDate",e.target.value)} style={inputS}/></Field>
+        <Field label="تاريخ التجديد القادم"><input type="date" value={form.nextRenewalDate} onChange={e=>set("nextRenewalDate",e.target.value)} style={inputS}/></Field>
+        <Field label="الأكونت مانجر">
+          <select value={form.accountManager} onChange={e=>set("accountManager",e.target.value)} style={inputS}>
+            <option value="">— اختر —</option>
+            {USERS.filter(u=>["account_manager","am_team_leader"].includes(u.role)).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </Field>
+        <Field label="الحالة">
+          <select value={form.status} onChange={e=>set("status",e.target.value)} style={inputS}>
+            <option value="active">🟢 نشط</option>
+            <option value="paused">⏸️ متوقف مؤقت</option>
+            <option value="cancelled">🔴 ملغي</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="رابط العقد (جوجل درايف)"><input type="url" value={form.contractUrl} onChange={e=>set("contractUrl",e.target.value)} placeholder="https://drive.google.com/..." style={inputS}/></Field>
+      <Field label="روابط التقارير (رابط في كل سطر)"><textarea value={form.reportUrls} onChange={e=>set("reportUrls",e.target.value)} rows={3} placeholder="تقارير الأداء اللي بنعرضها وقت التجديد" style={{...inputS,resize:"vertical"}}/></Field>
+      <Field label="ملاحظات"><textarea value={form.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inputS,resize:"vertical"}}/></Field>
+
+      {!isNew && (
+        <button onClick={markRenewed} style={{...btnGhost,background:T.okBg,color:T.ok,border:"1px solid #a7f3d0",width:"100%",marginBottom:10,fontWeight:700}}>
+          ✅ العميل جدّد — رحّل تاريخ التجديد للدورة الجاية
+        </button>
+      )}
+      {form._renewedNow && (
+        <div style={{background:T.okBg,border:"1px solid #a7f3d0",borderRadius:10,padding:"10px 14px",color:T.ok,fontSize:12,fontWeight:700,marginBottom:10}}>
+          💰 عند الحفظ هيتسجل تحصيل تلقائي بقيمة {fmt(form.contractValue)} {form.currency} في الحسابات
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={btnGhost}>إلغاء</button>
+        <button onClick={handleSave} style={btnPrimary}>💾 حفظ</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════ FINANCE MODALS ════════════════
+function ExpenseModal({expense,onSave,onClose}) {
+  const blank = { id:"E"+Date.now(), month:thisMonth(), category:"مرتبات", label:"", amount:"", currency:"SAR", notes:"", recurring:false, createdAt:today() };
+  const [form,setForm]=useState(expense?{...blank,...expense}:blank);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  return (
+    <Modal title={expense?"✏️ تعديل مصروف":"➕ إضافة مصروف"} onClose={onClose} maxWidth={480}>
+      <Field label="الشهر"><input type="month" value={form.month} onChange={e=>set("month",e.target.value)} style={inputS}/></Field>
+      <Field label="التصنيف">
+        <select value={form.category} onChange={e=>set("category",e.target.value)} style={inputS}>
+          {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
+        </select>
+      </Field>
+      <Field label="الوصف"><input value={form.label} onChange={e=>set("label",e.target.value)} placeholder="مثال: مرتب سيلز ١" style={inputS}/></Field>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
+        <Field label="المبلغ"><input type="number" value={form.amount} onChange={e=>set("amount",e.target.value)} style={inputS}/></Field>
+        <Field label="العملة">
+          <select value={form.currency} onChange={e=>set("currency",e.target.value)} style={inputS}>
+            <option>SAR</option><option>EGP</option><option>USD</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="ملاحظات"><input value={form.notes} onChange={e=>set("notes",e.target.value)} style={inputS}/></Field>
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:form.recurring?T.accent:T.textSoft,cursor:"pointer",marginBottom:14,background:form.recurring?T.accentBg:"#f8fafc",padding:"10px 14px",borderRadius:10,border:`1px solid ${form.recurring?"#c7d2fe":T.cardBorder}`}}>
+        <input type="checkbox" checked={!!form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{accentColor:T.primary,width:16,height:16}}/>
+        🔁 مصروف متكرر — يتسجل تلقائياً أول كل شهر
+      </label>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={btnGhost}>إلغاء</button>
+        <button onClick={()=>{ if(!form.amount){alert("المبلغ مطلوب");return;} onSave(form); }} style={btnPrimary}>💾 حفظ</button>
+      </div>
+    </Modal>
+  );
+}
+
+function CollectionModal({collection,onSave,onClose}) {
+  const blank = { id:"C"+Date.now(), date:today(), clientName:"", type:"عقد جديد", amount:"", currency:"SAR", notes:"", createdAt:today() };
+  const [form,setForm]=useState(collection?{...blank,...collection}:blank);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  return (
+    <Modal title={collection?"✏️ تعديل تحصيل":"➕ إضافة تحصيل (فلوس دخلت)"} onClose={onClose} maxWidth={480}>
+      <Field label="التاريخ"><input type="date" value={form.date} onChange={e=>set("date",e.target.value)} style={inputS}/></Field>
+      <Field label="اسم العميل"><input value={form.clientName} onChange={e=>set("clientName",e.target.value)} style={inputS}/></Field>
+      <Field label="النوع">
+        <select value={form.type} onChange={e=>set("type",e.target.value)} style={inputS}>
+          <option>عقد جديد</option><option>تجديد</option><option>دفعة إضافية</option><option>أخرى</option>
+        </select>
+      </Field>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
+        <Field label="المبلغ"><input type="number" value={form.amount} onChange={e=>set("amount",e.target.value)} style={inputS}/></Field>
+        <Field label="العملة">
+          <select value={form.currency} onChange={e=>set("currency",e.target.value)} style={inputS}>
+            <option>SAR</option><option>EGP</option><option>USD</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="ملاحظات"><input value={form.notes} onChange={e=>set("notes",e.target.value)} style={inputS}/></Field>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={btnGhost}>إلغاء</button>
+        <button onClick={()=>{ if(!form.amount){alert("المبلغ مطلوب");return;} onSave(form); }} style={btnPrimary}>💾 حفظ</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════ FINANCE TAB (مدير فقط) ════════════════
+function FinanceTab({expenses,collections,settings,onAddExpense,onEditExpense,onDeleteExpense,onAddCollection,onEditCollection,onDeleteCollection,onSaveSettings,period,setPeriod}) {
+  const [sub,setSub]=useState("overview");
+  const [showExp,setShowExp]=useState(false);
+  const [showCol,setShowCol]=useState(false);
+  const [editExp,setEditExp]=useState(null);
+  const [editCol,setEditCol]=useState(null);
+  const [officeP,setOfficeP]=useState(settings.officePercent??10);
+  const [taxP,setTaxP]=useState(settings.taxPercent??14);
+
+  useEffect(()=>{ setOfficeP(settings.officePercent??10); setTaxP(settings.taxPercent??14); },[settings]);
+
+  const pCollections = getPeriodItems(collections, period, "date");
+  const pExpenses = expenses.filter(e=>{
+    if (period==="monthly") return e.month===thisMonth();
+    if (period==="yearly"||period==="half"||period==="quarter") {
+      const y = new Date().getFullYear();
+      return (e.month||"").startsWith(String(y));
+    }
+    return true;
+  });
+
+  const gross = pCollections.reduce((s,c)=>s+Number(c.amount||0),0);
+  const afterOffice = gross * (1 - officeP/100);
+  const afterTax = gross * (1 - taxP/100);
+  const afterBoth = gross * (1 - officeP/100 - taxP/100);
+  const totalExpenses = pExpenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const netProfit = afterBoth - totalExpenses;
+
+  const PERIODS=[{id:"monthly",label:"هذا الشهر"},{id:"quarter",label:"هذا الربع"},{id:"half",label:"نصف العام"},{id:"yearly",label:"هذا العام"},{id:"all",label:"الكل"}];
+  const SUBS=[{id:"overview",label:"📊 نظرة عامة"},{id:"collections",label:"💰 التحصيلات"},{id:"expenses",label:"📤 المصاريف"},{id:"settings",label:"⚙️ النسب"}];
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {SUBS.map(s=><button key={s.id} onClick={()=>setSub(s.id)} style={{padding:"8px 18px",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:sub===s.id?T.primary:"#fff",color:sub===s.id?"#fff":T.textSoft,boxShadow:T.shadow}}>{s.label}</button>)}
+      </div>
+
+      {sub!=="settings" && (
+        <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
+          {PERIODS.map(p=><button key={p.id} onClick={()=>setPeriod(p.id)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${period===p.id?T.primary:T.cardBorder}`,cursor:"pointer",fontSize:12,fontWeight:600,background:period===p.id?T.primary:"#fff",color:period===p.id?"#fff":T.textSoft}}>{p.label}</button>)}
+        </div>
+      )}
+
+      {sub==="overview" && (
+        <div>
+          <div className="stat-cards" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>
+            <StatCard label="إجمالي المُحصَّل (Gross)" value={fmt(gross)} icon="💰" color={T.accent}/>
+            <StatCard label={`بعد خصم مكتب السعودية ${officeP}%`} value={fmt(afterOffice)} icon="🏢" color="#7c3aed"/>
+            <StatCard label={`بعد خصم الضريبة ${taxP}%`} value={fmt(afterTax)} icon="🧾" color={T.warn}/>
+            <StatCard label={`بعد الخصمين (${officeP}% + ${taxP}%)`} value={fmt(afterBoth)} icon="⚖️" color="#0369a1"/>
+          </div>
+          <div className="stat-cards" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:20}}>
+            <StatCard label="إجمالي المصاريف" value={fmt(totalExpenses)} icon="📤" color={T.danger}/>
+            <StatCard label={netProfit>=0?"صافي الربح ✅":"صافي الخسارة ⚠️"} value={fmt(Math.abs(netProfit))}
+              sub={netProfit>=0?"الشركة كسبانة":"الشركة خسرانة"} icon={netProfit>=0?"📈":"📉"} color={netProfit>=0?T.ok:T.danger}/>
+          </div>
+          <div style={{background:T.card,borderRadius:14,padding:20,boxShadow:T.shadow}}>
+            <p style={{color:T.textSoft,fontSize:12,fontWeight:700,marginBottom:14}}>المصاريف حسب التصنيف</p>
+            {EXPENSE_CATS.map(cat=>{
+              const catTotal = pExpenses.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount||0),0);
+              if (catTotal===0) return null;
+              return <div key={cat} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{color:T.text,fontSize:13}}>{cat}</span>
+                  <span style={{color:T.danger,fontWeight:700,fontSize:13}}>{fmt(catTotal)}</span>
+                </div>
+                <div style={{height:5,background:"#f1f5f9",borderRadius:3}}>
+                  <div style={{height:"100%",width:`${totalExpenses?(catTotal/totalExpenses*100):0}%`,background:T.danger,borderRadius:3}}/>
+                </div>
+              </div>;
+            })}
+            {totalExpenses===0 && <p style={{color:T.textMuted,fontSize:12}}>لا يوجد مصاريف في الفترة دي</p>}
+          </div>
+          <div style={{background:T.card,borderRadius:14,padding:20,boxShadow:T.shadow,marginTop:14}}>
+            <p style={{color:T.textSoft,fontSize:12,fontWeight:700,marginBottom:14}}>📊 شهر بشهر (آخر ٦ شهور)</p>
+            {(()=>{
+              const months=[]; const d=new Date();
+              for(let i=5;i>=0;i--){const m=new Date(d.getFullYear(),d.getMonth()-i,1);months.push(m.toISOString().slice(0,7));}
+              const rows=months.map(m=>{
+                const col=collections.filter(x=>(String(x.date||"")).slice(0,7)===m).reduce((s,x)=>s+Number(x.amount||0),0);
+                const exp=expenses.filter(x=>(String(x.month||"")).slice(0,7)===m).reduce((s,x)=>s+Number(x.amount||0),0);
+                return {m,col,exp,net:col-exp};
+              });
+              const max=Math.max(...rows.map(r=>Math.max(r.col,r.exp)),1);
+              return rows.map(r=>(
+                <div key={r.m} style={{marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                    <span style={{color:T.text,fontWeight:700}}>{r.m}</span>
+                    <span style={{fontWeight:800,color:r.net>=0?T.ok:T.danger}}>{r.net>=0?"📈":"📉"} صافي: {fmt(r.net)}</span>
+                  </div>
+                  <div style={{height:8,background:"#f1f5f9",borderRadius:4,marginBottom:3}}><div style={{height:"100%",width:`${r.col/max*100}%`,background:T.ok,borderRadius:4}}/></div>
+                  <div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${r.exp/max*100}%`,background:T.danger,borderRadius:4}}/></div>
+                </div>
+              ));
+            })()}
+            <div style={{display:"flex",gap:14,fontSize:11,color:T.textSoft,marginTop:6}}>
+              <span><span style={{display:"inline-block",width:10,height:10,background:T.ok,borderRadius:2,marginLeft:4}}/>تحصيل</span>
+              <span><span style={{display:"inline-block",width:10,height:10,background:T.danger,borderRadius:2,marginLeft:4}}/>مصاريف</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sub==="collections" && (
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
+            <h3 style={{color:T.text,fontSize:15,margin:0}}>التحصيلات ({pCollections.length}) — {fmt(gross)}</h3>
+            <button onClick={()=>{setEditCol(null);setShowCol(true);}} style={btnPrimary}>➕ إضافة تحصيل</button>
+          </div>
+          <div style={{background:T.card,borderRadius:14,overflow:"hidden",boxShadow:T.shadow}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{background:"#f8fafc",color:T.textSoft,fontSize:11}}>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>التاريخ</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>العميل</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>النوع</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>المبلغ</th>
+                  <th style={{padding:"11px 14px"}}></th>
+                </tr></thead>
+                <tbody>
+                  {pCollections.length===0&&<tr><td colSpan={5} style={{padding:30,textAlign:"center",color:T.textMuted}}>لا يوجد تحصيلات</td></tr>}
+                  {pCollections.map(c=>(
+                    <tr key={c.id} style={{borderBottom:`1px solid ${T.cardBorder}`}}>
+                      <td style={{padding:"11px 14px",color:T.textSoft,fontSize:12}}>{c.date}</td>
+                      <td style={{padding:"11px 14px",color:T.text,fontWeight:600}}>{c.clientName||"—"}</td>
+                      <td style={{padding:"11px 14px"}}><Badge label={c.type} color={c.type==="تجديد"?"#7c3aed":T.accent}/></td>
+                      <td style={{padding:"11px 14px",color:T.ok,fontWeight:800}}>{fmt(c.amount)} {c.currency}</td>
+                      <td style={{padding:"11px 14px"}}>
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={()=>{setEditCol(c);setShowCol(true);}} style={{...btnGhost,padding:"4px 10px",fontSize:12}}>✏️</button>
+                          <button onClick={()=>{ if(confirm("متأكد من الحذف؟")) onDeleteCollection(c.id); }} style={{...btnGhost,padding:"4px 10px",fontSize:12,color:T.danger}}>🗑️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sub==="expenses" && (
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
+            <h3 style={{color:T.text,fontSize:15,margin:0}}>المصاريف ({pExpenses.length}) — {fmt(totalExpenses)}</h3>
+            <button onClick={()=>{setEditExp(null);setShowExp(true);}} style={btnPrimary}>➕ إضافة مصروف</button>
+          </div>
+          <div style={{background:T.card,borderRadius:14,overflow:"hidden",boxShadow:T.shadow}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{background:"#f8fafc",color:T.textSoft,fontSize:11}}>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>الشهر</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>التصنيف</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>الوصف</th>
+                  <th style={{textAlign:"right",padding:"11px 14px"}}>المبلغ</th>
+                  <th style={{padding:"11px 14px"}}></th>
+                </tr></thead>
+                <tbody>
+                  {pExpenses.length===0&&<tr><td colSpan={5} style={{padding:30,textAlign:"center",color:T.textMuted}}>لا يوجد مصاريف</td></tr>}
+                  {pExpenses.map(x=>(
+                    <tr key={x.id} style={{borderBottom:`1px solid ${T.cardBorder}`}}>
+                      <td style={{padding:"11px 14px",color:T.textSoft,fontSize:12}}>{x.month}</td>
+                      <td style={{padding:"11px 14px"}}><Badge label={x.category} color={T.danger}/></td>
+                      <td style={{padding:"11px 14px",color:T.text}}>{x.label||"—"}</td>
+                      <td style={{padding:"11px 14px",color:T.danger,fontWeight:800}}>{fmt(x.amount)} {x.currency}</td>
+                      <td style={{padding:"11px 14px"}}>
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={()=>{setEditExp(x);setShowExp(true);}} style={{...btnGhost,padding:"4px 10px",fontSize:12}}>✏️</button>
+                          <button onClick={()=>{ if(confirm("متأكد من الحذف؟")) onDeleteExpense(x.id); }} style={{...btnGhost,padding:"4px 10px",fontSize:12,color:T.danger}}>🗑️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sub==="settings" && (
+        <div style={{background:T.card,borderRadius:14,padding:24,boxShadow:T.shadow,maxWidth:460}}>
+          <p style={{color:T.text,fontSize:14,fontWeight:700,marginBottom:16}}>⚙️ نسب الخصم — اتحكم فيها من هنا</p>
+          <Field label="نسبة مصاريف مكتب السعودية (%)">
+            <input type="number" value={officeP} onChange={e=>setOfficeP(Number(e.target.value))} style={inputS}/>
+          </Field>
+          <Field label="نسبة الضريبة (%)">
+            <input type="number" value={taxP} onChange={e=>setTaxP(Number(e.target.value))} style={inputS}/>
+          </Field>
+          <button onClick={()=>onSaveSettings({officePercent:officeP,taxPercent:taxP})} style={{...btnPrimary,width:"100%"}}>💾 حفظ النسب</button>
+        </div>
+      )}
+
+      {showExp && <ExpenseModal expense={editExp} onSave={x=>{editExp?onEditExpense(x):onAddExpense(x);setShowExp(false);setEditExp(null);}} onClose={()=>{setShowExp(false);setEditExp(null);}}/>}
+      {showCol && <CollectionModal collection={editCol} onSave={x=>{editCol?onEditCollection(x):onAddCollection(x);setShowCol(false);setEditCol(null);}} onClose={()=>{setShowCol(false);setEditCol(null);}}/>}
+    </div>
+  );
+}
+
+// ════════════════ RENEWALS TAB ════════════════
+function RenewalsTab({renewals,user,onEdit,onAdd}) {
+  const visible = can.seeAllRenewals(user) ? renewals : renewals.filter(r=>r.accountManager===user.id);
+  const sorted = [...visible].sort((a,b)=>new Date(a.nextRenewalDate||"2099")-new Date(b.nextRenewalDate||"2099"));
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,alignItems:"center",flexWrap:"wrap",gap:10}}>
+        <h2 style={{color:T.text,fontSize:17,margin:0}}>🔁 التجديدات ({visible.length})</h2>
+        <button onClick={onAdd} style={btnPrimary}>➕ عقد جديد</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
+        {sorted.length===0 && <p style={{color:T.textMuted,gridColumn:"1/-1",textAlign:"center",padding:40}}>لا يوجد عقود بعد — اضغط ➕ لإضافة أول عقد</p>}
+        {sorted.map(r=>{
+          const alert = getRenewalAlert(r);
+          const du = daysUntil(r.nextRenewalDate);
+          const am = USERS.find(u=>u.id===r.accountManager);
+          const cyc = CYCLES.find(c=>c.v===Number(r.cycle));
+          return (
+            <div key={r.id} onClick={()=>onEdit(r)} style={{
+              background:T.card,borderRadius:14,padding:18,cursor:"pointer",boxShadow:T.shadow,
+              border: alert ? `2px solid ${alert.color}` : `1px solid ${T.cardBorder}`
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div style={{color:T.text,fontWeight:800,fontSize:15}}>{r.clientName}</div>
+                <Badge label={r.status==="active"?"🟢 نشط":r.status==="paused"?"⏸️ متوقف":"🔴 ملغي"} color={r.status==="active"?T.ok:r.status==="paused"?T.warn:T.danger}/>
+              </div>
+              {alert && <div style={{background:alert.bg,color:alert.color,padding:"8px 12px",borderRadius:8,fontSize:12,fontWeight:700,marginBottom:10}}>{alert.text}</div>}
+              <div style={{fontSize:12,color:T.textSoft,lineHeight:2}}>
+                💰 {fmt(r.contractValue)} {r.currency} — {cyc?.l||""}<br/>
+                📅 التجديد القادم: <b style={{color: du!==null&&du<=7?T.danger:T.text}}>{r.nextRenewalDate||"—"}</b> {du!==null && du>=0 && `(بعد ${du} يوم)`}<br/>
+                👤 {am?.name||"غير معيّن"}
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+                <WhatsAppBtn phone={r.phone} country={r.phoneCountry}/>
+                {r.contractUrl && <a href={r.contractUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{padding:"4px 10px",borderRadius:6,background:T.accentBg,color:T.accent,fontSize:12,fontWeight:700,border:"1px solid #c7d2fe"}}>📄 العقد</a>}
+                {r.reportUrls && r.reportUrls.trim() && <span style={{padding:"4px 10px",borderRadius:6,background:"#fdf4ff",color:"#a21caf",fontSize:12,fontWeight:700,border:"1px solid #f5d0fe"}}>📊 {r.reportUrls.trim().split("\n").length} تقرير</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════ LEAD ROW ════════════════
+function LeadRow({lead,user,onEdit,onActivity,onQuickSend,showFull}) {
+  const tS=TELE_STAGES.find(s=>s.id===lead.teleStage);
+  const sS=SALES_STAGES.find(s=>s.id===lead.salesStage);
+  const alerts = getLeadAlerts(lead);
+  const isUrgent = alerts.some(a=>["overdue","today"].includes(a.level));
+  return (
+    <tr style={{borderBottom:`1px solid ${T.cardBorder}`, background: isUrgent ? "#fef2f2" : "transparent"}}>
+      <td style={{padding:"12px 14px",fontSize:13}}>
+        <div style={{fontWeight:700,color:isUrgent?T.danger:T.text}}>{isUrgent&&"🔴 "}{showFull?lead.clientName:`عميل #${lead.id}`}</div>
+        <div style={{color:T.textMuted,fontSize:11,marginTop:2}}>{lead.niche}{lead.source?` · ${lead.source}`:""}</div>
+      </td>
+      {showFull && <td className="hide-mobile" style={{padding:"12px 14px"}}>
+        <div style={{color:T.textSoft,fontSize:12,direction:"ltr",textAlign:"right",marginBottom:4}}>{lead.phoneCountry} {lead.phone}</div>
+        <WhatsAppBtn phone={lead.phone} country={lead.phoneCountry}/>
+      </td>}
+      <td style={{padding:"12px 14px"}}>{tS&&<Badge label={`${tS.icon} ${tS.label}`} color={tS.color}/>}</td>
+      <td style={{padding:"12px 14px"}}>{sS?<Badge label={`${sS.icon} ${sS.label}`} color={sS.color}/>:<span style={{color:T.textMuted,fontSize:11}}>—</span>}</td>
+      <td className="hide-mobile" style={{padding:"12px 14px"}}>
+        <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:PRIORITY_COLOR[lead.priority]||"#94a3b8",marginLeft:6}}/>
+        <span style={{color:T.textSoft,fontSize:11}}>{PRIORITY_LABEL[lead.priority]}</span>
+      </td>
+      <td style={{padding:"12px 14px",fontSize:11}}>
+        {alerts.length>0
+          ? <span style={{color:T.danger,fontWeight:700}}>⚠️ {alerts[0].label} {alerts[0].days<0?`متأخر ${Math.abs(alerts[0].days)}ي`:alerts[0].days===0?"اليوم":"بكرة"}</span>
+          : <span style={{color:T.textSoft}}>{lead.followUpDate||"—"}</span>}
+      </td>
+      <td style={{padding:"12px 14px"}}>
+        <div style={{display:"flex",gap:6}}>
+          {onQuickSend&&lead.phone&&<button onClick={()=>onQuickSend(lead)} title="إرسال واتساب" style={{...btnGhost,padding:"5px 10px",fontSize:12,background:"#dcfce7",borderColor:"#bbf7d0",color:"#15803d",fontWeight:700}}>💬</button>}
+          <button onClick={()=>onActivity(lead)} style={{...btnGhost,padding:"5px 10px",fontSize:12}}>📝</button>
+          <button onClick={()=>onEdit(lead)} style={{...btnGhost,padding:"5px 10px",fontSize:12}}>✏️</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ════════════════ DASHBOARD ════════════════
+function Dashboard({leads,renewals,user,period,setPeriod,targets}) {
+  const pl = getPeriodItems(leads, period, "createdAt");
+  const won=pl.filter(l=>l.salesStage==="won");
+  const lost=pl.filter(l=>l.salesStage==="lost");
+  const meetings=pl.filter(l=>l.teleStage==="meeting_booked");
+  const totalBudget=won.reduce((s,l)=>s+Number(l.budget||0),0);
+  const pipelineVal=pl.filter(l=>!["won","lost"].includes(l.salesStage)).reduce((s,l)=>s+Number(l.budget||0),0);
+
+  const allAlerts = leads.flatMap(getLeadAlerts);
+  const renewAlerts = renewals.map(getRenewalAlert).filter(Boolean);
+
+  const PERIODS=[{id:"daily",label:"اليوم"},{id:"weekly",label:"الأسبوع"},{id:"monthly",label:"الشهر"},{id:"quarter",label:"الربع"},{id:"half",label:"نص السنة"},{id:"yearly",label:"السنة"}];
+  const teleDist=TELE_STAGES.map(s=>({...s,count:pl.filter(l=>l.teleStage===s.id).length})).filter(s=>s.count>0);
+  const salesDist=SALES_STAGES.map(s=>({...s,count:pl.filter(l=>l.salesStage===s.id).length})).filter(s=>s.count>0);
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {PERIODS.map(p=><button key={p.id} onClick={()=>setPeriod(p.id)} style={{padding:"7px 16px",borderRadius:20,border:`1px solid ${period===p.id?T.primary:T.cardBorder}`,cursor:"pointer",fontSize:12,fontWeight:600,background:period===p.id?T.primary:"#fff",color:period===p.id?"#fff":T.textSoft}}>{p.label}</button>)}
+      </div>
+
+      {(allAlerts.length>0||renewAlerts.length>0) && (
+        <div style={{background:T.dangerBg,border:"1px solid #fecaca",borderRadius:14,padding:16,marginBottom:18}}>
+          <p style={{color:T.danger,fontSize:13,fontWeight:800,margin:"0 0 10px"}}>🔔 تنبيهات النهارده ({allAlerts.length+renewAlerts.length})</p>
+          {allAlerts.slice(0,6).map((a,i)=><div key={"a"+i} style={{color:"#7f1d1d",fontSize:12,padding:"5px 0",borderBottom:"1px solid #fee2e2",fontWeight:600}}>{a.text}</div>)}
+          {renewAlerts.slice(0,4).map((a,i)=><div key={"r"+i} style={{color:a.color,fontSize:12,padding:"5px 0",borderBottom:"1px solid #fee2e2",fontWeight:600}}>{a.text}</div>)}
+        </div>
+      )}
+
+      <div className="stat-cards" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:18}}>
+        <StatCard label="إجمالي الليدز" value={pl.length} icon="🎯" color={T.accent}/>
+        <StatCard label="اجتماعات محجوزة" value={meetings.length} icon="📅" color="#7c3aed"/>
+        <StatCard label="صفقات مغلقة" value={won.length} icon="🏆" color={T.ok}/>
+        <StatCard label="خسرناها" value={lost.length} icon="💔" color={T.danger}/>
+        <StatCard label="قيمة البايبلاين" value={fmt(pipelineVal)} sub={won.length>0?`مُغلق: ${fmt(totalBudget)}`:""} icon="💰" color={T.warn}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
+        <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>توزيع مراحل الأوتريتش</p>
+          {teleDist.length===0&&<p style={{color:T.textMuted,fontSize:12}}>لا يوجد بيانات</p>}
+          {teleDist.map(s=><div key={s.id} style={{marginBottom:9}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{color:T.text,fontSize:12}}>{s.icon} {s.label}</span>
+              <span style={{color:s.color,fontWeight:700,fontSize:13}}>{s.count}</span>
+            </div>
+            <div style={{height:4,background:"#f1f5f9",borderRadius:2}}><div style={{height:"100%",width:`${(s.count/pl.length*100)||0}%`,background:s.color,borderRadius:2}}/></div>
+          </div>)}
+        </div>
+        <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>توزيع مراحل السيلز</p>
+          {salesDist.length===0&&<p style={{color:T.textMuted,fontSize:12}}>لا يوجد بيانات</p>}
+          {salesDist.map(s=><div key={s.id} style={{marginBottom:9}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{color:T.text,fontSize:12}}>{s.icon} {s.label}</span>
+              <span style={{color:s.color,fontWeight:700,fontSize:13}}>{s.count}</span>
+            </div>
+            <div style={{height:4,background:"#f1f5f9",borderRadius:2}}><div style={{height:"100%",width:`${(s.count/Math.max(pl.filter(l=>l.salesStage).length,1)*100)||0}%`,background:s.color,borderRadius:2}}/></div>
+          </div>)}
+        </div>
+      </div>
+
+      {can.allLeads(user) && (
+        <div style={{background:T.card,borderRadius:14,padding:18,marginTop:14,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>🏅 أداء الفريق</p>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{color:T.textMuted,borderBottom:`1px solid ${T.cardBorder}`}}>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>الموظف</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>البوزيشن</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>ليدز</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>اجتماعات</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>مغلق</th>
+              </tr></thead>
+              <tbody>{USERS.filter(u=>u.role!=="manager").map(u=>{
+                const ml=pl.filter(l=>l.teleAgent===u.id||l.salesAgent===u.id);
+                return <tr key={u.id} style={{borderBottom:`1px solid #f8fafc`}}>
+                  <td style={{padding:"9px 12px",color:T.text,fontWeight:600}}>{u.name}</td>
+                  <td style={{padding:"9px 12px",color:T.textSoft}}>{ROLES[u.role]?.label}</td>
+                  <td style={{padding:"9px 12px",color:T.accent,fontWeight:700}}>{ml.length}</td>
+                  <td style={{padding:"9px 12px",color:T.warn,fontWeight:700}}>{ml.filter(l=>l.teleStage==="meeting_booked").length}</td>
+                  <td style={{padding:"9px 12px",color:T.ok,fontWeight:700}}>{ml.filter(l=>l.salesStage==="won").length}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 🎯 تارجت الشهر — للموظف */}
+      {targets && targets[user.id] && (()=>{
+        const ml = getPeriodItems(leads,"monthly","createdAt").filter(l=>l.teleAgent===user.id||l.salesAgent===user.id);
+        const tg = targets[user.id];
+        const rows = [
+          {label:"📅 اجتماعات محجوزة", val: ml.filter(l=>l.teleStage==="meeting_booked").length, target: Number(tg.meetings||0)},
+          {label:"🏆 صفقات مغلقة", val: ml.filter(l=>l.salesStage==="won").length, target: Number(tg.won||0)},
+        ].filter(r=>r.target>0);
+        if (!rows.length) return null;
+        return <div style={{background:T.card,borderRadius:14,padding:18,marginTop:14,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 14px",fontWeight:700}}>🎯 تارجت الشهر بتاعك</p>
+          {rows.map(r=>{
+            const pct = Math.min(100, Math.round(r.val/r.target*100));
+            const clr = pct>=100?T.ok:pct>=60?T.warn:T.danger;
+            return <div key={r.label} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:12}}>
+                <span style={{color:T.text,fontWeight:600}}>{r.label}</span>
+                <span style={{color:clr,fontWeight:800}}>{r.val} / {r.target} ({pct}%)</span>
+              </div>
+              <div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:pct+"%",background:clr,borderRadius:4,transition:"width 0.4s"}}/></div>
+            </div>;
+          })}
+        </div>;
+      })()}
+
+      {/* 🎯 التارجت مقابل الفعلي — للمدير */}
+      {/* معدل التحويل حسب المصدر والنيتش */}
+      {pl.length>0 && (()=>{
+        const groupRates = (key) => {
+          const groups = {};
+          pl.forEach(l=>{ const k=l[key]||"غير محدد"; groups[k]=groups[k]||{total:0,meet:0,won:0}; groups[k].total++; if(l.teleStage==="meeting_booked"||l.salesStage)groups[k].meet++; if(l.salesStage==="won")groups[k].won++; });
+          return Object.entries(groups).sort((a,b)=>b[1].total-a[1].total).slice(0,6);
+        };
+        const bySource = groupRates("source"), byNiche = groupRates("niche");
+        const rateRow = ([name,g],i) => (
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,fontSize:12}}>
+            <span style={{minWidth:110,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span>
+            <span style={{color:T.textMuted,minWidth:44}}>{g.total} ليد</span>
+            <span style={{color:"#7c3aed",fontWeight:700,minWidth:80}}>📅 {g.total?Math.round(g.meet/g.total*100):0}% اجتماع</span>
+            <span style={{color:T.ok,fontWeight:800,minWidth:70}}>🏆 {g.total?Math.round(g.won/g.total*100):0}% إغلاق</span>
+          </div>
+        );
+        return (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14,marginTop:14}}>
+            <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+              <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>📈 معدل التحويل حسب المصدر</p>
+              {bySource.map(rateRow)}
+            </div>
+            <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow}}>
+              <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>📈 معدل التحويل حسب النيتش</p>
+              {byNiche.map(rateRow)}
+            </div>
+          </div>
+        );
+      })()}
+
+      {can.allLeads(user) && targets && Object.keys(targets).some(k=>k!=="company") && (()=>{
+        const ml = getPeriodItems(leads,"monthly","createdAt");
+        const rows = USERS.filter(u=>u.role!=="manager"&&targets[u.id]&&(Number(targets[u.id].meetings||0)>0||Number(targets[u.id].won||0)>0));
+        if (!rows.length) return null;
+        return <div style={{background:T.card,borderRadius:14,padding:18,marginTop:14,boxShadow:T.shadow}}>
+          <p style={{color:T.textSoft,fontSize:12,margin:"0 0 14px",fontWeight:700}}>🎯 تارجت الفريق مقابل الفعلي (الشهر الحالي)</p>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{color:T.textMuted,borderBottom:`1px solid ${T.cardBorder}`}}>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>الموظف</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>اجتماعات</th>
+                <th style={{textAlign:"right",padding:"8px 12px"}}>صفقات</th>
+              </tr></thead>
+              <tbody>{rows.map(u=>{
+                const mine = ml.filter(l=>l.teleAgent===u.id||l.salesAgent===u.id);
+                const tg = targets[u.id];
+                const cell = (val, target) => {
+                  if (!Number(target)) return <span style={{color:T.textMuted}}>—</span>;
+                  const pct = Math.min(100, Math.round(val/target*100));
+                  const clr = pct>=100?T.ok:pct>=60?T.warn:T.danger;
+                  return <div style={{minWidth:130}}>
+                    <div style={{fontSize:11,fontWeight:800,color:clr,marginBottom:3}}>{val}/{target} ({pct}%)</div>
+                    <div style={{height:5,background:"#f1f5f9",borderRadius:3}}><div style={{height:"100%",width:pct+"%",background:clr,borderRadius:3}}/></div>
+                  </div>;
+                };
+                return <tr key={u.id} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"9px 12px",color:T.text,fontWeight:700}}>{u.name}</td>
+                  <td style={{padding:"9px 12px"}}>{cell(mine.filter(l=>l.teleStage==="meeting_booked").length, tg.meetings)}</td>
+                  <td style={{padding:"9px 12px"}}>{cell(mine.filter(l=>l.salesStage==="won").length, tg.won)}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
+        </div>;
+      })()}
+
+      {/* 📈 معدلات التحويل */}
+      {can.allLeads(user) && pl.length>0 && (()=>{
+        const groups = (key) => {
+          const map = {};
+          pl.forEach(l=>{ const k=l[key]||"غير محدد"; if(!map[k])map[k]={leads:0,meetings:0,won:0}; map[k].leads++; if(l.teleStage==="meeting_booked"||l.salesStage)map[k].meetings++; if(l.salesStage==="won")map[k].won++; });
+          return Object.entries(map).sort((a,b)=>b[1].leads-a[1].leads).slice(0,8);
+        };
+        const tbl = (title,key)=>(
+          <div key={key} style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,flex:1,minWidth:280}}>
+            <p style={{color:T.textSoft,fontSize:12,margin:"0 0 12px",fontWeight:700}}>{title}</p>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{color:T.textMuted}}>
+                <th style={{textAlign:"right",padding:"6px 8px"}}></th>
+                <th style={{padding:"6px 8px"}}>ليدز</th>
+                <th style={{padding:"6px 8px"}}>وصل اجتماع</th>
+                <th style={{padding:"6px 8px"}}>قفل</th>
+                <th style={{padding:"6px 8px"}}>تحويل</th>
+              </tr></thead>
+              <tbody>{groups(key).map(([k,v])=>(
+                <tr key={k} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"7px 8px",color:T.text,fontWeight:600}}>{k}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.accent,fontWeight:700}}>{v.leads}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.warn,fontWeight:700}}>{v.meetings}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",color:T.ok,fontWeight:700}}>{v.won}</td>
+                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:800,color:v.leads&&v.won/v.leads>=0.1?T.ok:T.textSoft}}>{v.leads?Math.round(v.won/v.leads*100):0}%</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        );
+        return <div style={{display:"flex",gap:14,marginTop:14,flexWrap:"wrap"}}>{[tbl("📈 التحويل حسب المصدر","source"),tbl("📈 التحويل حسب النيتش","niche")]}</div>;
+      })()}
+    </div>
+  );
+}
+
+// ════════════════ WHATSAPP: NEW CHAT MODAL ════════════════
+function NewChatModal({instances,user,onSend,onClose}) {
+  const allowed = can.allChats(user) ? instances : instances.filter(i=>(user.instances||[]).includes(i.id));
+  const [inst,setInst]=useState(allowed[0]?.id||"");
+  const [phone,setPhone]=useState("");
+  const [country,setCountry]=useState("+966");
+  const [text,setText]=useState("");
+  const [busy,setBusy]=useState(false);
+  return (
+    <Modal title="✉️ محادثة جديدة" onClose={onClose} maxWidth={460}>
+      <Field label="الرقم المُرسِل (Instance)">
+        <select value={inst} onChange={e=>setInst(e.target.value)} style={inputS}>
+          {allowed.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
+        </select>
+      </Field>
+      <Field label="رقم العميل">
+        <PhoneInput phone={phone} country={country} onPhone={setPhone} onCountry={setCountry}/>
+      </Field>
+      <Field label="الرسالة">
+        <textarea value={text} onChange={e=>setText(e.target.value)} rows={3} style={{...inputS,resize:"vertical"}}/>
+      </Field>
+      <button disabled={busy} onClick={async()=>{
+        const chatId = toChatId(phone,country);
+        if (!chatId||!text.trim()||!inst){alert("كمّل البيانات");return;}
+        setBusy(true);
+        await onSend(inst, chatId, text.trim());
+        setBusy(false); onClose();
+      }} style={{...btnPrimary,width:"100%",opacity:busy?0.7:1}}>{busy?"⏳ جارٍ الإرسال...":"📤 إرسال"}</button>
+    </Modal>
+  );
+}
+
+// ════════════════ WHATSAPP TAB ════════════════
+function WhatsAppTab({user,instances,funnel,quickReplies,leads,slaHours=2,onOpenLead,onCreateLeadFromChat}) {
+  const [chats,setChats]=useState([]);
+  const [activeChat,setActiveChat]=useState(null);
+  const [messages,setMessages]=useState([]);
+  const [text,setText]=useState("");
+  const [waSearch,setWaSearch]=useState("");
+  const [fStatus,setFStatus]=useState("");
+  const [fInst,setFInst]=useState("");
+  const [showFavs,setShowFavs]=useState(false);
+  const [favMsgs,setFavMsgs]=useState([]);
+  const [showNew,setShowNew]=useState(false);
+  const [showSched,setShowSched]=useState(false);
+  const [schedList,setSchedList]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const [loadingChats,setLoadingChats]=useState(true);
+  const msgsEndRef = useRef(null);
+  const activeChatRef = useRef(null);
+  activeChatRef.current = activeChat;
+
+  const loadChats = useCallback(async () => {
+    try {
+      const res = await jsonpCall({ action:"getChats", userId:user.id });
+      if (res.success) setChats(res.chats||[]);
+    } catch(e){ console.error(e); }
+    setLoadingChats(false);
+  },[user.id]);
+
+  const loadMessages = useCallback(async (chatId, markRead=true) => {
+    try {
+      const res = await jsonpCall({ action:"getMessages", chatId, markRead: markRead?"1":"0", userId:user.id });
+      if (res.success) {
+        setMessages(res.messages||[]);
+        if (markRead) setChats(prev=>prev.map(c=>c.chat_id===chatId?{...c,unread:0}:c));
+      }
+    } catch(e){ console.error(e); }
+  },[user.id]);
+
+  // تحميل أولي + تحديث تلقائي كل 20 ثانية
+  useEffect(()=>{
+    loadChats();
+    const iv = setInterval(()=>{
+      loadChats();
+      if (activeChatRef.current) loadMessages(activeChatRef.current.chat_id, false);
+    }, 20000);
+    return ()=>clearInterval(iv);
+  },[loadChats,loadMessages]);
+
+  useEffect(()=>{ if(msgsEndRef.current) msgsEndRef.current.scrollIntoView({behavior:"smooth"}); },[messages]);
+
+  const openChat = (c) => { setActiveChat(c); setShowFavs(false); setShowSched(false); loadMessages(c.chat_id); };
+  const loadSched = async () => {
+    setShowSched(true); setShowFavs(false); setActiveChat(null);
+    try {
+      const res = await jsonpCall({ action:"getScheduled", userId:user.id });
+      if (res.success) setSchedList(res.items||[]);
+    } catch(e){}
+  };
+
+  const send = async () => {
+    if (!text.trim()||!activeChat) return;
+    const t = text.trim(); setText(""); setBusy(true);
+    // إضافة فورية للواجهة
+    const tempMsg = { id:"tmp"+Date.now(), chat_id:activeChat.chat_id, direction:"out", text:t, ts:new Date().toISOString(), agent:user.name, fav:false };
+    setMessages(prev=>[...prev,tempMsg]);
+    try {
+      const res = await jsonpCall({ action:"sendWA", instanceId:activeChat.instance_id, chatId:activeChat.chat_id, text:t, agentId:user.id, agentName:user.name });
+      if (!res.success) alert("❌ فشل الإرسال: "+(res.error||""));
+    } catch(e){ alert("❌ مشكلة في الاتصال"); }
+    setBusy(false);
+  };
+
+  const sendNew = async (instanceId, chatId, t) => {
+    try {
+      const res = await jsonpCall({ action:"sendWA", instanceId, chatId, text:t, agentId:user.id, agentName:user.name });
+      if (res.success) { await loadChats(); }
+      else alert("❌ "+(res.error||"فشل الإرسال"));
+    } catch(e){ alert("❌ مشكلة في الاتصال"); }
+  };
+
+  const toggleFav = async (m) => {
+    setMessages(prev=>prev.map(x=>x.id===m.id?{...x,fav:!x.fav}:x));
+    try { await jsonpCall({ action:"toggleFavMsg", id:m.id }); } catch(e){}
+  };
+
+  const setChatFunnel = async (c, statusId) => {
+    setChats(prev=>prev.map(x=>x.chat_id===c.chat_id?{...x,funnel:statusId}:x));
+    if (activeChat?.chat_id===c.chat_id) setActiveChat(a=>({...a,funnel:statusId}));
+    try { await jsonpCall({ action:"setChatStatus", chatId:c.chat_id, status:statusId }); } catch(e){}
+  };
+
+  const loadFavs = async () => {
+    setShowFavs(true); setShowSched(false); setActiveChat(null);
+    try {
+      const res = await jsonpCall({ action:"getFavMessages", userId:user.id });
+      if (res.success) setFavMsgs(res.messages||[]);
+    } catch(e){}
+  };
+
+  const linkedLead = activeChat ? leads.find(l=>String(l.id)===String(activeChat.leadId)) ||
+    leads.find(l=>normPhone(l.phone) && chatIdToPhone(activeChat.chat_id).endsWith(normPhone(l.phone))) : null;
+
+  const filteredChats = chats.filter(c=>{
+    const q = waSearch.toLowerCase();
+    const mq = !q || (c.name||"").toLowerCase().includes(q) || (c.chat_id||"").includes(q) || (c.lastMsgText||"").toLowerCase().includes(q);
+    return mq && (!fStatus||c.funnel===fStatus) && (!fInst||c.instance_id===fInst);
+  }).sort((a,b)=>new Date(b.lastMsgAt||0)-new Date(a.lastMsgAt||0));
+
+  const totalUnread = chats.reduce((s,c)=>s+Number(c.unread||0),0);
+  const showAllInst = can.allChats(user);
+
+  const chip = (label,color,active,onClick) => (
+    <button onClick={onClick} style={{padding:"4px 12px",borderRadius:20,border:`1px solid ${active?color:T.cardBorder}`,cursor:"pointer",fontSize:11,fontWeight:700,background:active?color:"#fff",color:active?"#fff":T.textSoft,whiteSpace:"nowrap"}}>{label}</button>
+  );
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
+        <h2 style={{margin:0,fontSize:17,color:T.text}}>💬 الواتساب {totalUnread>0&&<span style={{background:T.danger,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,marginRight:6}}>{totalUnread}</span>}</h2>
+        <div style={{flex:1}}/>
+        <button onClick={loadFavs} style={{...btnGhost,padding:"7px 14px",fontSize:12,background:showFavs?"#fefce8":"#fff",borderColor:showFavs?"#eab308":T.cardBorder,color:showFavs?"#a16207":T.textSoft,fontWeight:700}}>⭐ المفضلة</button>
+        <button onClick={loadSched} style={{...btnGhost,padding:"7px 14px",fontSize:12,background:showSched?T.accentBg:"#fff",borderColor:showSched?"#c7d2fe":T.cardBorder,color:showSched?T.accent:T.textSoft,fontWeight:700}}>⏰ المجدولة</button>
+        <button onClick={()=>setShowNew(true)} style={btnPrimary}>✉️ محادثة جديدة</button>
+      </div>
+
+      {/* فلاتر */}
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+        <input value={waSearch} onChange={e=>setWaSearch(e.target.value)} placeholder="🔍 بحث بالاسم أو الرقم أو النص..." style={{...inputS,width:"auto",minWidth:200,padding:"7px 12px",fontSize:12}}/>
+        {chip("الكل","#64748b",!fStatus,()=>setFStatus(""))}
+        {funnel.map(f=>chip(f.label,f.color,fStatus===f.id,()=>setFStatus(fStatus===f.id?"":f.id)))}
+        {showAllInst && instances.length>1 && (
+          <select value={fInst} onChange={e=>setFInst(e.target.value)} style={{...inputS,width:"auto",padding:"6px 10px",fontSize:12}}>
+            <option value="">كل الأرقام</option>
+            {instances.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div className="wa-layout" style={{display:"flex",gap:12,height:"calc(100vh - 240px)",minHeight:400}}>
+        {/* قائمة المحادثات */}
+        <div className="wa-list-panel" style={{width:330,flexShrink:0,background:T.card,borderRadius:14,boxShadow:T.shadow,overflowY:"auto"}}>
+          {loadingChats && <p style={{color:T.textMuted,textAlign:"center",padding:30,fontSize:13}}>⏳ جارٍ التحميل...</p>}
+          {!loadingChats && filteredChats.length===0 && <p style={{color:T.textMuted,textAlign:"center",padding:30,fontSize:13}}>لا يوجد محادثات{fStatus||waSearch?" مطابقة":""} بعد<br/><span style={{fontSize:11}}>الرسايل الجاية هتظهر هنا تلقائياً</span></p>}
+          {filteredChats.map(c=>{
+            const f = funnel.find(x=>x.id===c.funnel);
+            const slaBreach = Number(c.unread)>0 && c.lastMsgAt && (Date.now()-new Date(c.lastMsgAt).getTime()) > slaHours*3600000;
+            const inst = instances.find(i=>i.id===c.instance_id);
+            const lead = leads.find(l=>String(l.id)===String(c.leadId));
+            return (
+              <div key={c.chat_id} onClick={()=>openChat(c)} style={{padding:"12px 14px",borderBottom:`1px solid ${T.cardBorder}`,cursor:"pointer",background:activeChat?.chat_id===c.chat_id?T.accentBg:(slaBreach?"#fef2f2":"transparent"),borderRight:slaBreach?`3px solid ${T.danger}`:"none"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <div style={{fontWeight:700,fontSize:13,color:T.text,display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
+                    {f&&<span style={{width:8,height:8,borderRadius:"50%",background:f.color,flexShrink:0}}/>}
+                    <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.clientName||c.name||chatIdToPhone(c.chat_id)}</span>
+                    {lead&&<span title="مربوط بليد" style={{fontSize:10}}>🔗</span>}
+                  </div>
+                  <span style={{flexShrink:0,display:"flex",gap:4,alignItems:"center"}}>{slaBreach&&<span style={{color:T.danger,fontSize:9,fontWeight:800,background:"#fee2e2",borderRadius:6,padding:"1px 5px"}}>⏰ من غير رد</span>}<span style={{color:T.textMuted,fontSize:10}}>{timeAgo(c.lastMsgAt)}</span></span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{color:T.textSoft,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{c.lastMsgText||""}</div>
+                  {Number(c.unread)>0&&<span style={{background:T.ok,color:"#fff",borderRadius:12,padding:"1px 7px",fontSize:10,fontWeight:800,flexShrink:0,marginRight:6}}>{c.unread}</span>}
+                </div>
+                {showAllInst&&<div style={{color:T.textMuted,fontSize:10,marginTop:2}}>📱 {inst?.label||c.instance_id}</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* نافذة الشات / المفضلة */}
+        <div style={{flex:1,background:T.card,borderRadius:14,boxShadow:T.shadow,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {showSched ? (
+            <div style={{padding:16,overflowY:"auto"}}>
+              <p style={{fontWeight:800,fontSize:14,color:T.accent,marginBottom:14}}>⏰ الرسايل المجدولة ({schedList.length})</p>
+              {schedList.length===0&&<p style={{color:T.textMuted,fontSize:13}}>مفيش رسايل مجدولة — من زرار 💬 عند أي ليد تقدر تحدد وقت للإرسال</p>}
+              {schedList.map(s=>(
+                <div key={s.id} style={{background:T.accentBg,border:"1px solid #c7d2fe",borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:11,color:T.accent,fontWeight:800}}>📅 {String(s.sendAt).replace("T"," ")} → +{chatIdToPhone(s.chatId)}</span>
+                    <button onClick={async()=>{ if(!confirm("إلغاء الرسالة دي؟"))return; try{ await jsonpCall({action:"cancelScheduled",id:s.id}); setSchedList(p=>p.filter(x=>x.id!==s.id)); }catch(e){} }} style={{...btnGhost,padding:"3px 10px",fontSize:11,color:T.danger}}>إلغاء</button>
+                  </div>
+                  <div style={{fontSize:13,color:T.text}}>{s.text}</div>
+                  <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>بواسطة: {s.createdBy||"—"}</div>
+                </div>
+              ))}
+            </div>
+          ) : showFavs ? (
+            <div style={{padding:16,overflowY:"auto"}}>
+              <p style={{fontWeight:800,fontSize:14,color:"#a16207",marginBottom:14}}>⭐ الرسايل المفضلة ({favMsgs.length})</p>
+              {favMsgs.length===0&&<p style={{color:T.textMuted,fontSize:13}}>معلّمتش رسايل لسه — دوس على ⭐ جنب أي رسالة مهمة</p>}
+              {favMsgs.map(m=>{
+                const c = chats.find(x=>x.chat_id===m.chat_id);
+                return (
+                  <div key={m.id} onClick={()=>{ if(c) openChat(c); }} style={{background:"#fefce8",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginBottom:8,cursor:c?"pointer":"default"}}>
+                    <div style={{fontSize:11,color:"#a16207",fontWeight:700,marginBottom:3}}>{c?.name||chatIdToPhone(m.chat_id)} · {timeAgo(m.ts)} {m.direction==="out"?"· 📤 "+(m.agent||""):""}</div>
+                    <div style={{fontSize:13,color:T.text}}>{m.text}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : !activeChat ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:8}}>
+              <div style={{fontSize:44}}>💬</div>
+              <p style={{color:T.textMuted,fontSize:13}}>اختار محادثة من القائمة أو ابدأ محادثة جديدة</p>
+            </div>
+          ) : (
+            <>
+              {/* هيدر الشات */}
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.cardBorder}`,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <button className="hide-desktop" onClick={()=>setActiveChat(null)} style={{...btnGhost,padding:"4px 10px",fontSize:12}}>‹ رجوع</button>
+                <div style={{flex:1,minWidth:120}}>
+                  <div style={{fontWeight:800,fontSize:14,color:T.text}}>{linkedLead?.clientName||activeChat.name||chatIdToPhone(activeChat.chat_id)}</div>
+                  <div style={{color:T.textMuted,fontSize:11,direction:"ltr",textAlign:"right"}}>+{chatIdToPhone(activeChat.chat_id)}</div>
+                </div>
+                <select value={activeChat.funnel||""} onChange={e=>setChatFunnel(activeChat,e.target.value)} style={{...inputS,width:"auto",padding:"6px 10px",fontSize:12,fontWeight:700,color:funnel.find(f=>f.id===activeChat.funnel)?.color||T.textSoft}}>
+                  <option value="">— بدون حالة —</option>
+                  {funnel.map(f=><option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+                {linkedLead
+                  ? <button onClick={()=>onOpenLead(linkedLead)} style={{...btnGhost,padding:"6px 12px",fontSize:12,color:T.accent,borderColor:"#c7d2fe",background:T.accentBg,fontWeight:700}}>🔗 فتح الليد</button>
+                  : <button onClick={()=>onCreateLeadFromChat(activeChat)} style={{...btnGhost,padding:"6px 12px",fontSize:12,color:T.ok,borderColor:"#a7f3d0",background:T.okBg,fontWeight:700}}>➕ تحويل لليد</button>}
+              </div>
+
+              {/* الرسايل */}
+              <div style={{flex:1,overflowY:"auto",padding:16,background:"#f8f9fd"}}>
+                {messages.map(m=>(
+                  <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-start":"flex-end",marginBottom:8}}>
+                    <div style={{maxWidth:"75%",padding:"9px 13px",borderRadius:m.direction==="out"?"12px 12px 12px 3px":"12px 12px 3px 12px",
+                      background:m.direction==="out"?T.primary:"#fff",color:m.direction==="out"?"#fff":T.text,
+                      boxShadow:"0 1px 2px rgba(0,0,0,0.08)",position:"relative",fontSize:13,lineHeight:1.5}}>
+                      {m.text}
+                      <div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,justifyContent:"space-between"}}>
+                        <span style={{fontSize:9,opacity:0.65}}>{timeAgo(m.ts)}{m.direction==="out"&&m.agent?" · "+m.agent:""}</span>
+                        <button onClick={()=>toggleFav(m)} title="مفضلة" style={{background:"none",border:"none",cursor:"pointer",fontSize:12,opacity:m.fav?1:0.35,padding:0}}>⭐</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={msgsEndRef}/>
+              </div>
+
+              {/* الإرسال */}
+              <div style={{padding:"10px 14px",borderTop:`1px solid ${T.cardBorder}`,display:"flex",gap:8,alignItems:"flex-end"}}>
+                {quickReplies.length>0&&(
+                  <select value="" onChange={e=>{ if(e.target.value) setText(t=>t?t+" "+e.target.value:e.target.value); }} style={{...inputS,width:44,padding:"9px 6px",fontSize:14,flexShrink:0}} title="ردود جاهزة">
+                    <option value="">⚡</option>
+                    {quickReplies.map(q=><option key={q.id} value={q.text}>{q.title}</option>)}
+                  </select>
+                )}
+                <textarea value={text} onChange={e=>setText(e.target.value)} rows={1} placeholder="اكتب رسالتك..."
+                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }}
+                  style={{...inputS,flex:1,resize:"none",maxHeight:100}}/>
+                <label title="إرفاق صورة / ملف" style={{...btnGhost,padding:"10px 12px",cursor:"pointer",flexShrink:0}}>📎
+                  <input type="file" style={{display:"none"}} onChange={async e=>{
+                    const f=e.target.files[0]; e.target.value="";
+                    if(!f||!activeChat) return;
+                    setBusy(true);
+                    const res = await sendMediaRequest({instanceId:activeChat.instance_id, chatId:activeChat.chat_id, caption:text.trim(), file:f, agentName:user.name});
+                    setBusy(false);
+                    if(res.success){ setText(""); loadMessages(activeChat.chat_id,false); }
+                    else alert("❌ "+(res.error||"فشل إرسال الملف"));
+                  }}/>
+                </label>
+                <button onClick={send} disabled={busy} style={{...btnPrimary,padding:"10px 18px",opacity:busy?0.7:1,flexShrink:0}}>📤</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {showNew&&<NewChatModal instances={instances} user={user} onSend={sendNew} onClose={()=>setShowNew(false)}/>}
+    </div>
+  );
+}
+
+// ════════════════ RULES TAB (المدير فقط) ════════════════
+function RulesTab({users,instances,funnel,quickReplies,autoCfg,targets,onSaveUser,onSaveInstances,onSaveFunnel,onSaveQR,onDeleteQR,onSaveAuto}) {
+  const [sub,setSub]=useState("users");
+  const [edits,setEdits]=useState({});
+  const [newInstId,setNewInstId]=useState("");
+  const [newInstLabel,setNewInstLabel]=useState("");
+  const [newFunnel,setNewFunnel]=useState({label:"",color:"#4f46e5"});
+  const [newQR,setNewQR]=useState({title:"",text:"",stage:"all"});
+  const [auto,setAuto]=useState({defaultInstance:"",slaHours:2,autoRenewMsg:false,renewTemplate:""});
+  const [tgt,setTgt]=useState({});
+  const [recExp,setRecExp]=useState([]);
+  const [newRec,setNewRec]=useState({category:"مرتبات",label:"",amount:"",currency:"SAR"});
+  useEffect(()=>{ setAuto(a=>({...a,...(autoCfg||{})})); setRecExp((autoCfg&&autoCfg.recurringExpenses)||[]); },[autoCfg]);
+  useEffect(()=>{ setTgt(JSON.parse(JSON.stringify(targets||{}))); },[targets]);
+
+  const getU = (u) => edits[u.id] ? edits[u.id] : u;
+  const setU = (id, patch) => setEdits(prev=>({...prev,[id]:{...(prev[id]||users.find(x=>x.id===id)),...patch}}));
+
+  const blankUser = () => ({ id:"u"+Date.now(), username:"", password:"", name:"", role:"sales", instances:[], perms:{}, active:true, _new:true });
+
+  const SUBS=[{id:"users",label:"👥 الموظفون والصلاحيات"},{id:"instances",label:"📱 الأرقام"},{id:"funnel",label:"🎯 حالات الفانل"},{id:"qr",label:"⚡ السكربتات"},{id:"auto",label:"🤖 الأتمتة والتارجت"}];
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
+        {SUBS.map(s=><button key={s.id} onClick={()=>setSub(s.id)} style={{padding:"8px 16px",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:sub===s.id?T.primary:"#fff",color:sub===s.id?"#fff":T.textSoft,boxShadow:T.shadow}}>{s.label}</button>)}
+      </div>
+
+      {sub==="users"&&(
+        <div>
+          <button onClick={()=>{const nu=blankUser();setEdits(p=>({...p,[nu.id]:nu}));}} style={{...btnPrimary,marginBottom:14}}>➕ إضافة موظف</button>
+          <div style={{display:"grid",gap:12}}>
+            {[...users.map(u=>u.id),...Object.keys(edits).filter(id=>edits[id]?._new)].filter((v,i,a)=>a.indexOf(v)===i).map(id=>{
+              const u = getU(users.find(x=>x.id===id)||edits[id]);
+              if (!u) return null;
+              return (
+                <div key={id} style={{background:T.card,borderRadius:14,padding:16,boxShadow:T.shadow,border:u._new?`2px dashed ${T.accent}`:`1px solid ${T.cardBorder}`}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:10}}>
+                    <Field label="الاسم"><input value={u.name||""} onChange={e=>setU(id,{name:e.target.value})} style={inputS}/></Field>
+                    <Field label="اسم المستخدم"><input value={u.username||""} onChange={e=>setU(id,{username:e.target.value})} style={{...inputS,direction:"ltr"}}/></Field>
+                    <Field label="كلمة المرور"><input value={u.password||""} onChange={e=>setU(id,{password:e.target.value})} style={{...inputS,direction:"ltr"}}/></Field>
+                    <Field label="البوزيشن">
+                      <select value={u.role} onChange={e=>setU(id,{role:e.target.value})} style={inputS}>
+                        {Object.keys(ROLES).map(r=><option key={r} value={r}>{ROLES[r].label}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="📱 الأرقام المسموحة (الموظف مش هيشوف غيرهم)">
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {instances.length===0&&<span style={{color:T.textMuted,fontSize:12}}>ضيف أرقام من تاب "الأرقام" الأول</span>}
+                      {instances.map(inst=>{
+                        const checked = (u.instances||[]).includes(inst.id);
+                        return <label key={inst.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,background:checked?T.accentBg:"#f8fafc",border:`1px solid ${checked?"#c7d2fe":T.cardBorder}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontWeight:600,color:checked?T.accent:T.textSoft}}>
+                          <input type="checkbox" checked={checked} onChange={e=>{
+                            const cur = new Set(u.instances||[]);
+                            e.target.checked?cur.add(inst.id):cur.delete(inst.id);
+                            setU(id,{instances:[...cur]});
+                          }} style={{accentColor:T.primary}}/>
+                          {inst.label||inst.id}
+                        </label>;
+                      })}
+                    </div>
+                  </Field>
+                  <Field label="🔐 الصلاحيات">
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {PERM_DEFS.map(p=>{
+                        const val = (u.perms&&u.perms[p.key]!==undefined&&u.perms[p.key]!=="")?!!u.perms[p.key]:roleDefault[p.key](u.role);
+                        return <label key={p.key} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,background:val?T.okBg:"#f8fafc",border:`1px solid ${val?"#a7f3d0":T.cardBorder}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontWeight:600,color:val?T.ok:T.textSoft}}>
+                          <input type="checkbox" checked={val} onChange={e=>setU(id,{perms:{...(u.perms||{}),[p.key]:e.target.checked}})} style={{accentColor:T.ok}}/>
+                          {p.label}
+                        </label>;
+                      })}
+                    </div>
+                  </Field>
+                  <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:u.active!==false?T.ok:T.danger,cursor:"pointer"}}>
+                      <input type="checkbox" checked={u.active!==false} onChange={e=>setU(id,{active:e.target.checked})} style={{accentColor:T.ok}}/>
+                      {u.active!==false?"نشط ✅":"موقوف ⛔"}
+                    </label>
+                    <button onClick={async()=>{
+                      if(!u.username||!u.password||!u.name){alert("كمّل الاسم واليوزر والباسورد");return;}
+                      const clean={...u}; delete clean._new;
+                      await onSaveUser(clean);
+                      setEdits(p=>{const n={...p};delete n[id];return n;});
+                    }} style={btnPrimary}>💾 حفظ</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {sub==="instances"&&(
+        <div style={{maxWidth:560}}>
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>➕ إضافة رقم (Instance من Taayer)</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <Field label="Instance ID (زي: instance12004)"><input value={newInstId} onChange={e=>setNewInstId(e.target.value)} style={{...inputS,direction:"ltr"}} placeholder="instance12004"/></Field>
+              <Field label="اسم واضح للفريق"><input value={newInstLabel} onChange={e=>setNewInstLabel(e.target.value)} style={inputS} placeholder="رقم مبيعات ١"/></Field>
+            </div>
+            <button onClick={()=>{
+              if(!newInstId.trim())return;
+              onSaveInstances([...instances,{id:newInstId.trim(),label:newInstLabel.trim()||newInstId.trim()}]);
+              setNewInstId("");setNewInstLabel("");
+            }} style={btnPrimary}>➕ إضافة</button>
+          <button onClick={async()=>{
+            try {
+              const res = await jsonpCall({ action:"syncInstances" });
+              if (res.success && res.instances && res.instances.length) {
+                onSaveInstances(res.instances);
+                alert("✅ تم مزامنة "+res.instances.length+" رقم من Taayer");
+              } else alert("⚠️ "+(res.error||"مفيش أرقام جديدة أو تأكد من التوكن"));
+            } catch(e){ alert("❌ فشل الاتصال بالسيرفر"); }
+          }} style={{...btnGhost,marginTop:0,color:"#15803d",borderColor:"#bbf7d0",background:"#dcfce7",fontWeight:700}}>🔄 مزامنة من Taayer</button>
+          </div>
+          {instances.map(inst=>(
+            <div key={inst.id} style={{background:T.card,borderRadius:12,padding:"12px 16px",boxShadow:T.shadow,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:T.text}}>📱 {inst.label}</div>
+                <div style={{color:T.textMuted,fontSize:11,direction:"ltr",textAlign:"right"}}>{inst.id}</div>
+              </div>
+              <button onClick={()=>{ if(confirm("حذف الرقم من السستم؟ (مش هيتحذف من Taayer)")) onSaveInstances(instances.filter(i=>i.id!==inst.id)); }} style={{...btnGhost,padding:"5px 12px",fontSize:12,color:T.danger}}>🗑️</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sub==="funnel"&&(
+        <div style={{maxWidth:560}}>
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>➕ إضافة حالة جديدة للفانل</p>
+            <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+              <div style={{flex:1}}><Field label="الاسم"><input value={newFunnel.label} onChange={e=>setNewFunnel(f=>({...f,label:e.target.value}))} style={inputS} placeholder="مثال: عرض مُرسل"/></Field></div>
+              <div><Field label="اللون"><input type="color" value={newFunnel.color} onChange={e=>setNewFunnel(f=>({...f,color:e.target.value}))} style={{width:60,height:40,border:"none",borderRadius:8,cursor:"pointer",background:"none"}}/></Field></div>
+              <button onClick={()=>{
+                if(!newFunnel.label.trim())return;
+                onSaveFunnel([...funnel,{id:"f"+Date.now(),label:newFunnel.label.trim(),color:newFunnel.color}]);
+                setNewFunnel({label:"",color:"#4f46e5"});
+              }} style={{...btnPrimary,marginBottom:13}}>➕</button>
+            </div>
+          </div>
+          {funnel.map(f=>(
+            <div key={f.id} style={{background:T.card,borderRadius:12,padding:"12px 16px",boxShadow:T.shadow,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{width:14,height:14,borderRadius:"50%",background:f.color}}/>
+                <span style={{fontWeight:700,fontSize:13,color:T.text}}>{f.label}</span>
+              </div>
+              <button onClick={()=>{ if(confirm("حذف الحالة؟")) onSaveFunnel(funnel.filter(x=>x.id!==f.id)); }} style={{...btnGhost,padding:"5px 12px",fontSize:12,color:T.danger}}>🗑️</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sub==="qr"&&(
+        <div style={{maxWidth:640}}>
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>➕ سكربت جديد (الموظف يبعته بضغطة ⚡)</p>
+            <Field label="العنوان"><input value={newQR.title} onChange={e=>setNewQR(q=>({...q,title:e.target.value}))} style={inputS} placeholder="مثال: رسالة الافتتاح"/></Field>
+            <Field label="🎯 مرتبط بمرحلة (السكربت هيظهر للموظف أول حاجة لما الليد في المرحلة دي)">
+              <select value={newQR.stage} onChange={e=>setNewQR(q=>({...q,stage:e.target.value}))} style={inputS}>
+                <option value="all">🌐 عام — كل المراحل</option>
+                <optgroup label="مراحل الأوتريتش">
+                  {TELE_STAGES.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                </optgroup>
+                <optgroup label="مراحل السيلز">
+                  {SALES_STAGES.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                </optgroup>
+              </select>
+            </Field>
+            <Field label="نص الرسالة"><textarea value={newQR.text} onChange={e=>setNewQR(q=>({...q,text:e.target.value}))} rows={3} style={{...inputS,resize:"vertical"}} placeholder="السلام عليكم، معاك ... من شركة Falak..."/></Field>
+            <button onClick={()=>{
+              if(!newQR.title.trim()||!newQR.text.trim())return;
+              onSaveQR({id:"q"+Date.now(),title:newQR.title.trim(),text:newQR.text.trim(),stage:newQR.stage||"all"});
+              setNewQR({title:"",text:"",stage:"all"});
+            }} style={btnPrimary}>➕ إضافة</button>
+          </div>
+          {quickReplies.map(q=>(
+            <div key={q.id} style={{background:T.card,borderRadius:12,padding:"12px 16px",boxShadow:T.shadow,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <span style={{fontWeight:700,fontSize:13,color:T.text}}>⚡ {q.title} {(()=>{
+                  const st = TELE_STAGES.find(s=>s.id===q.stage)||SALES_STAGES.find(s=>s.id===q.stage);
+                  return st ? <Badge label={st.icon+" "+st.label} color={st.color}/> : <Badge label="عام" color="#64748b"/>;
+                })()}</span>
+                <button onClick={()=>{ if(confirm("حذف الرد؟")) onDeleteQR(q.id); }} style={{...btnGhost,padding:"4px 10px",fontSize:12,color:T.danger}}>🗑️</button>
+              </div>
+              <div style={{color:T.textSoft,fontSize:12,whiteSpace:"pre-wrap"}}>{q.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sub==="auto"&&(
+        <div style={{maxWidth:720}}>
+          {/* التارجت الشهري */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:4}}>🎯 التارجت الشهري لكل موظف</p>
+            <p style={{color:T.textMuted,fontSize:11,marginBottom:14}}>حدد عدد الاجتماعات والصفقات المطلوبة — هتظهر نسبة الإنجاز في الداشبورد</p>
+            {users.filter(u=>u.role!=="manager").map(u=>{
+              const t = tgt[u.id]||{};
+              return <div key={u.id} style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                <span style={{fontWeight:700,fontSize:13,color:T.text,minWidth:130}}>{u.name}</span>
+                <input type="number" placeholder="اجتماعات" value={t.meetings||""} onChange={e=>setTgt(p=>({...p,[u.id]:{...(p[u.id]||{}),meetings:e.target.value}}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+                <input type="number" placeholder="صفقات مغلقة" value={t.won||""} onChange={e=>setTgt(p=>({...p,[u.id]:{...(p[u.id]||{}),won:e.target.value}}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+              </div>;
+            })}
+          </div>
+
+          {/* الأتمتة */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:14}}>🤖 الأتمتة</p>
+            <Field label="⏱️ حد التأخير في الرد (بالساعات) — المحادثة تنور أحمر بعده">
+              <input type="number" value={auto.slaHours} onChange={e=>setAuto(a=>({...a,slaHours:Number(e.target.value)||2}))} style={{...inputS,width:120}}/>
+            </Field>
+            <Field label="📱 الرقم المستخدم في الرسايل التلقائية">
+              <select value={auto.defaultInstance||""} onChange={e=>setAuto(a=>({...a,defaultInstance:e.target.value}))} style={inputS}>
+                <option value="">— اختر —</option>
+                {instances.map(i=><option key={i.id} value={i.id}>{i.label||i.id}</option>)}
+              </select>
+            </Field>
+            <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:auto.autoRenewMsg?T.ok:T.textSoft,cursor:"pointer",marginBottom:10}}>
+              <input type="checkbox" checked={!!auto.autoRenewMsg} onChange={e=>setAuto(a=>({...a,autoRenewMsg:e.target.checked}))} style={{accentColor:T.ok,width:16,height:16}}/>
+              🔁 تفعيل رسالة التجديد التلقائية (بتتبعت قبل التجديد بـ ٣٠ و١٤ و٧ أيام)
+            </label>
+            {auto.autoRenewMsg&&(
+              <Field label="نص رسالة التجديد — استخدم {الاسم} و{التاريخ} و{القيمة}">
+                <textarea value={auto.renewTemplate||""} onChange={e=>setAuto(a=>({...a,renewTemplate:e.target.value}))} rows={3} style={{...inputS,resize:"vertical"}} placeholder="أهلاً {الاسم} 👋 نذكر حضرتك إن تجديد الاشتراك ({القيمة}) موعده {التاريخ}. يسعدنا استمرار التعاون 🌟"/>
+              </Field>
+            )}
+          </div>
+
+          {/* المصاريف المتكررة */}
+          <div style={{background:T.card,borderRadius:14,padding:18,boxShadow:T.shadow,marginBottom:14}}>
+            <p style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:4}}>🔁 المصاريف المتكررة</p>
+            <p style={{color:T.textMuted,fontSize:11,marginBottom:14}}>بتتسجل تلقائي في الحسابات أول كل شهر (مرتبات، إيجار...)</p>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap",marginBottom:12}}>
+              <select value={newRec.category} onChange={e=>setNewRec(r=>({...r,category:e.target.value}))} style={{...inputS,width:130,padding:"8px 10px",fontSize:12}}>
+                {EXPENSE_CATS.map(x=><option key={x}>{x}</option>)}
+              </select>
+              <input placeholder="الوصف" value={newRec.label} onChange={e=>setNewRec(r=>({...r,label:e.target.value}))} style={{...inputS,width:160,padding:"8px 10px",fontSize:12}}/>
+              <input type="number" placeholder="المبلغ" value={newRec.amount} onChange={e=>setNewRec(r=>({...r,amount:e.target.value}))} style={{...inputS,width:110,padding:"8px 10px",fontSize:12}}/>
+              <select value={newRec.currency} onChange={e=>setNewRec(r=>({...r,currency:e.target.value}))} style={{...inputS,width:80,padding:"8px 10px",fontSize:12}}>
+                <option>SAR</option><option>EGP</option><option>USD</option>
+              </select>
+              <button onClick={()=>{
+                if(!newRec.amount)return;
+                setRecExp(p=>[...p,{id:"rec"+Date.now(),...newRec}]);
+                setNewRec({category:"مرتبات",label:"",amount:"",currency:"SAR"});
+              }} style={{...btnPrimary,padding:"9px 16px"}}>➕</button>
+            </div>
+            {recExp.map(r=>(
+              <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                <span style={{fontSize:12,color:T.text}}><b>{r.category}</b> — {r.label||"—"} — <b style={{color:T.danger}}>{fmt(r.amount)} {r.currency}</b> شهرياً</span>
+                <button onClick={()=>setRecExp(p=>p.filter(x=>x.id!==r.id))} style={{...btnGhost,padding:"3px 10px",fontSize:11,color:T.danger}}>🗑️</button>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={()=>onSaveAuto&&onSaveAuto({...auto,recurringExpenses:recExp},tgt)} style={{...btnPrimary,width:"100%"}}>💾 حفظ كل إعدادات الأتمتة والتارجت</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ════════════════ MEDIA HELPERS ════════════════
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1]);
+    r.onerror = () => rej(new Error("read failed"));
+    r.readAsDataURL(file);
+  });
+}
+async function sendMediaRequest({instanceId, chatId, caption, file, agentName}) {
+  if (file.size > 8*1024*1024) return { success:false, error:"أقصى حجم للملف 8 ميجا" };
+  const requestId = "req" + Date.now() + Math.random().toString(36).slice(2);
+  let data;
+  try { data = await fileToBase64(file); } catch(e){ return {success:false,error:"فشل قراءة الملف"}; }
+  try {
+    await fetch(SCRIPT_URL, {
+      method:"POST", mode:"no-cors",
+      headers:{"Content-Type":"text/plain"},
+      body: JSON.stringify({ action:"sendWAMedia", requestId, instanceId, chatId, caption:caption||"", fileName:file.name, mimeType:file.type, data, agentName })
+    });
+  } catch(e){ return {success:false,error:"فشل الاتصال بالسيرفر"}; }
+  for (let i=0;i<20;i++){
+    await new Promise(r=>setTimeout(r,2500));
+    try {
+      const res = await jsonpCall({ action:"checkRequest", id:requestId });
+      if (res.done) return res;
+    } catch(e){}
+  }
+  return { success:false, error:"استغرق الرفع وقت طويل — جرب ملف أصغر أو اعمل ريفريش وشوف المحادثة" };
+}
+
+// ════════════════ MINI CHAT MODAL (جوه الليدز مباشرة) ════════════════
+function QuickSendModal({lead,user,instances,quickReplies,onClose,onSent}) {
+  const allowed  = can.allChats(user) ? instances : instances.filter(i=>(user.instances||[]).includes(i.id));
+  const instId   = allowed[0]?.id || "";
+  const chatId   = toChatId(lead.phone, lead.phoneCountry);
+  const [msgs,setMsgs]   = useState([]);
+  const [text,setText]   = useState("");
+  const [busy,setBusy]   = useState(false);
+  const [loading,setLoading] = useState(true);
+  const endRef = React.useRef(null);
+
+  // جيب المحادثة السابقة
+  useEffect(()=>{
+    if (!chatId) { setLoading(false); return; }
+    (async()=>{
+      try {
+        const res = await jsonpCall({ action:"getMessages", chatId, markRead:"1", userId:user.id });
+        if (res.success) setMsgs(res.messages||[]);
+      } catch(e){}
+      setLoading(false);
+    })();
+  },[chatId]);
+
+  // scroll للآخر
+  useEffect(()=>{ endRef.current && endRef.current.scrollIntoView({behavior:"smooth"}); },[msgs]);
+
+  const send = async () => {
+    if (!text.trim() || !chatId || !instId) return;
+    const t = text.trim(); setText(""); setBusy(true);
+    // إضافة فورية
+    const tmp = { id:"tmp"+Date.now(), direction:"out", text:t, ts:new Date().toISOString(), agent:user.name };
+    setMsgs(p=>[...p,tmp]);
+    try {
+      const res = await jsonpCall({ action:"sendWA", instanceId:instId, chatId, text:t, agentId:user.id, agentName:user.name });
+      if (!res.success) alert("❌ "+(res.error||"فشل الإرسال"));
+      else { onSent && onSent(t); }
+    } catch(e){ alert("❌ مشكلة في الاتصال"); }
+    setBusy(false);
+  };
+
+  const onKey = e => { if ((e.ctrlKey||e.metaKey||e.shiftKey===false) && e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+
+  const stageId  = lead.salesStage||lead.teleStage||"";
+  const stageName= (SALES_STAGES.find(s=>s.id===stageId)||TELE_STAGES.find(s=>s.id===stageId))?.label||"";
+  const myScripts= quickReplies.filter(q=>q.stage===stageId);
+  const genScripts= quickReplies.filter(q=>!q.stage||q.stage==="all");
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(30,27,75,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,height:"78vh",maxHeight:640,display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(30,27,75,0.3)",overflow:"hidden"}}>
+
+        {/* هيدر */}
+        <div style={{background:T.primary,padding:"14px 18px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+          <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+            {(lead.clientName||"؟")[0]}
+          </div>
+          <div style={{flex:1,overflow:"hidden"}}>
+            <div style={{color:"#fff",fontWeight:800,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.clientName||("عميل #"+lead.id)}</div>
+            <div style={{color:"rgba(255,255,255,0.6)",fontSize:11,direction:"ltr",textAlign:"right"}}>{lead.phoneCountry||"+966"} {lead.phone} {instId&&<span style={{marginRight:6,background:"rgba(255,255,255,0.15)",padding:"1px 8px",borderRadius:10}}>📱 {allowed[0]?.label||instId}</span>}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:30,height:30,borderRadius:8,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* سكربتات سريعة */}
+        {(myScripts.length>0||genScripts.length>0) && (
+          <div style={{padding:"8px 12px",borderBottom:`1px solid ${T.cardBorder}`,display:"flex",gap:6,flexWrap:"wrap",flexShrink:0,background:"#fafbff"}}>
+            {stageName && myScripts.length>0 && <span style={{fontSize:10,color:T.textMuted,alignSelf:"center"}}>🎯 {stageName}:</span>}
+            {myScripts.map(q=>(
+              <button key={q.id} onClick={()=>setText(q.text.replace(/{الاسم}/g,lead.clientName||""))}
+                style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${T.accent}22`,background:T.accentBg,color:T.accent,fontSize:11,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
+                ⚡ {q.title}
+              </button>
+            ))}
+            {genScripts.map(q=>(
+              <button key={q.id} onClick={()=>setText(q.text.replace(/{الاسم}/g,lead.clientName||""))}
+                style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${T.cardBorder}`,background:"#fff",color:T.textSoft,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>
+                {q.title}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* الرسايل */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",background:"#f0f2f8",display:"flex",flexDirection:"column",gap:8}}>
+          {loading && <div style={{textAlign:"center",color:T.textMuted,fontSize:13,marginTop:40}}>⏳ جارٍ تحميل المحادثة...</div>}
+          {!loading && msgs.length===0 && (
+            <div style={{textAlign:"center",color:T.textMuted,fontSize:13,marginTop:40}}>
+              <div style={{fontSize:36,marginBottom:8}}>💬</div>
+              مفيش محادثات سابقة — ابعت أول رسالة!
+            </div>
+          )}
+          {msgs.map((m,i)=>{
+            const isOut = m.direction==="out";
+            return (
+              <div key={m.id||i} style={{display:"flex",justifyContent:isOut?"flex-start":"flex-end"}}>
+                <div style={{
+                  maxWidth:"78%",padding:"9px 13px",fontSize:13,lineHeight:1.55,
+                  borderRadius: isOut?"16px 16px 16px 3px":"16px 16px 3px 16px",
+                  background: isOut?T.primary:"#fff",
+                  color: isOut?"#fff":T.text,
+                  boxShadow:"0 1px 3px rgba(0,0,0,0.08)"
+                }}>
+                  <div style={{wordBreak:"break-word"}}>{m.text}</div>
+                  <div style={{fontSize:9,opacity:0.55,marginTop:4,textAlign:"left"}}>{timeAgo(m.ts)}{isOut&&m.agent?" · "+m.agent:""}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={endRef}/>
+        </div>
+
+        {/* خانة الكتابة */}
+        {!instId
+          ? <div style={{padding:14,background:"#fff",borderTop:`1px solid ${T.cardBorder}`,textAlign:"center",color:T.danger,fontSize:12,fontWeight:700}}>⚠️ مفيش رقم متصل — روح Rules وضيف Instance</div>
+          : <div style={{padding:"10px 12px",background:"#fff",borderTop:`1px solid ${T.cardBorder}`,display:"flex",gap:8,alignItems:"flex-end",flexShrink:0}}>
+              <textarea
+                value={text} onChange={e=>setText(e.target.value)} onKeyDown={onKey}
+                rows={2} placeholder="اكتب رسالتك... (Enter للإرسال، Shift+Enter لسطر جديد)"
+                autoFocus
+                style={{...inputS,flex:1,resize:"none",maxHeight:90,fontSize:13,borderRadius:12,padding:"10px 14px"}}/>
+              <button onClick={send} disabled={busy||!text.trim()} style={{
+                width:42,height:42,borderRadius:12,border:"none",cursor:"pointer",flexShrink:0,fontSize:18,
+                background:text.trim()?T.primary:"#e5e7f0",color:text.trim()?"#fff":T.textMuted,
+                opacity:busy?0.6:1,display:"flex",alignItems:"center",justifyContent:"center"
+              }}>{busy?"⏳":"📤"}</button>
+            </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════ MAIN APP ════════════════
+function App() {
+  const [currentUser,setCurrentUser]=useState(()=>{
+    try { const u=localStorage.getItem("maawan_user"); return u?JSON.parse(u):null; } catch(e){return null;}
+  });
+  const [leads,setLeads]=useState([]);
+  const [renewals,setRenewals]=useState([]);
+  const [expenses,setExpenses]=useState([]);
+  const [collections,setCollections]=useState([]);
+  const [settings,setSettings]=useState({officePercent:10,taxPercent:14});
+  const [instances,setInstances]=useState([]);
+  const [funnel,setFunnel]=useState(DEFAULT_FUNNEL);
+  const [quickReplies,setQuickReplies]=useState([]);
+  const [usersList,setUsersList]=useState([]);
+  const [waUnread,setWaUnread]=useState(0);
+  const [slaHours,setSlaHours]=useState(2);
+  const [targets,setTargets]=useState({});
+  const [autoCfg,setAutoCfg]=useState({});
+  const [loading,setLoading]=useState(false);
+  const [tab,setTab]=useState("dashboard");
+  const [search,setSearch]=useState("");
+  const [fNiche,setFNiche]=useState("");
+  const [fSource,setFSource]=useState("");
+  const [fPriority,setFPriority]=useState("");
+  const [fTeleStage,setFTeleStage]=useState("");
+  const [fSalesStage,setFSalesStage]=useState("");
+  const [editLead,setEditLead]=useState(null);
+  const [showLeadModal,setShowLeadModal]=useState(false);
+  const [activityLead,setActivityLead]=useState(null);
+  const [editRenewal,setEditRenewal]=useState(null);
+  const [showRenewalModal,setShowRenewalModal]=useState(false);
+  const [period,setPeriod]=useState("monthly");
+  const [showAlerts,setShowAlerts]=useState(false);
+  const [quickSendLead,setQuickSendLead]=useState(null);
+  const [alertsShown,setAlertsShown]=useState(false);
+
+  const loadAll = useCallback(async (user) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const data = await jsonpCall({ action:"getAll", userId:user.id, role:user.role });
+      if (data.success) {
+        setLeads(data.leads||[]);
+        setRenewals(data.renewals||[]);
+        if (data.users) { setUsersList(data.users); USERS.length=0; data.users.forEach(u=>USERS.push(u)); }
+        if (data.instances) setInstances(data.instances);
+        if (data.funnelStatuses && data.funnelStatuses.length) setFunnel(data.funnelStatuses);
+        if (data.quickReplies) setQuickReplies(data.quickReplies);
+        if (data.waUnread !== undefined) setWaUnread(Number(data.waUnread)||0);
+        if (data.slaHours !== undefined) setSlaHours(Number(data.slaHours)||2);
+        if (data.targets) setTargets(data.targets);
+        if (data.autoCfg) setAutoCfg(data.autoCfg);
+        if (can.finance(user)) {
+          setExpenses(data.expenses||[]);
+          setCollections(data.collections||[]);
+          if (data.settings) setSettings(data.settings);
+        }
+        try { localStorage.setItem("maawan_cache_"+user.id, JSON.stringify(data)); } catch(e){}
+      }
+    } catch(e) {
+      console.error("loadAll:", e);
+      try {
+        const c = JSON.parse(localStorage.getItem("maawan_cache_"+user.id)||"null");
+        if (c) {
+          setLeads(c.leads||[]); setRenewals(c.renewals||[]);
+          setExpenses(c.expenses||[]); setCollections(c.collections||[]);
+          if(c.settings)setSettings(c.settings);
+          if(c.instances)setInstances(c.instances);
+          if(c.funnelStatuses&&c.funnelStatuses.length)setFunnel(c.funnelStatuses);
+          if(c.quickReplies)setQuickReplies(c.quickReplies);
+          if(c.users){setUsersList(c.users);USERS.length=0;c.users.forEach(u=>USERS.push(u));}
+        }
+      } catch(e2){}
+    }
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{ if(currentUser) loadAll(currentUser); },[currentUser,loadAll]);
+
+  useEffect(()=>{
+    if (!currentUser || alertsShown || (leads.length===0 && renewals.length===0)) return;
+    const la = leads.flatMap(getLeadAlerts);
+    const ra = renewals.map(getRenewalAlert).filter(Boolean);
+    if (la.length>0 || ra.length>0) { setShowAlerts(true); setAlertsShown(true); }
+  },[leads,renewals,currentUser,alertsShown]);
+
+  const login = (user) => {
+    try { localStorage.setItem("maawan_user", JSON.stringify(user)); } catch(e){}
+    setCurrentUser(user); setAlertsShown(false);
+  };
+  const logout = () => {
+    try { localStorage.removeItem("maawan_user"); } catch(e){}
+    setCurrentUser(null); setLeads([]); setRenewals([]); setExpenses([]); setCollections([]);
+  };
+
+  const saveGeneric = async (action, key, payload) => {
+    try { await jsonpCall({ action, [key]: JSON.stringify(payload) }); setTimeout(()=>loadAll(currentUser), 2000); }
+    catch(e){ console.error(action, e); }
+  };
+
+  const handleSaveLead = (updated) => {
+    setLeads(prev=>{const i=prev.findIndex(l=>l.id===updated.id);if(i>=0){const n=[...prev];n[i]=updated;return n;}return[updated,...prev];});
+    setShowLeadModal(false); setEditLead(null);
+    saveGeneric("saveLead","lead",updated);
+  };
+  const handleActivity = (leadId,entry) => {
+    setLeads(prev=>prev.map(l=>l.id===leadId?{...l,activityLog:[...(l.activityLog||[]),entry],updatedAt:today()}:l));
+    jsonpCall({ action:"addActivity", leadId, entry:JSON.stringify(entry), userId:currentUser.id }).catch(e=>console.error(e));
+  };
+  const handleSaveRenewal = (r) => {
+    const renewedNow = r._renewedNow; const clean = {...r}; delete clean._renewedNow;
+    setRenewals(prev=>{const i=prev.findIndex(x=>x.id===clean.id);if(i>=0){const n=[...prev];n[i]=clean;return n;}return[clean,...prev];});
+    setShowRenewalModal(false); setEditRenewal(null);
+    saveGeneric("saveRenewal","renewal",clean);
+    if (renewedNow && Number(clean.contractValue||0)>0) {
+      const col = { id:"C"+Date.now(), date:today(), clientName:clean.clientName, type:"تجديد", amount:clean.contractValue, currency:clean.currency||"SAR", notes:"تسجيل تلقائي — زرار جدّد ✅", createdAt:today() };
+      setCollections(p=>[col,...p]);
+      jsonpCall({action:"saveCollection", collection:JSON.stringify(col)}).catch(e=>console.error(e));
+    }
+  };
+  const handleAddExpense = (x) => { setExpenses(p=>[x,...p]); saveGeneric("saveExpense","expense",x); };
+  const handleEditExpense = (x) => { setExpenses(p=>p.map(e=>e.id===x.id?x:e)); saveGeneric("saveExpense","expense",x); };
+  const handleDeleteExpense = (id) => { setExpenses(p=>p.filter(e=>e.id!==id)); jsonpCall({action:"deleteExpense",id}).catch(e=>console.error(e)); };
+  const handleAddCollection = (x) => { setCollections(p=>[x,...p]); saveGeneric("saveCollection","collection",x); };
+  const handleEditCollection = (x) => { setCollections(p=>p.map(e=>e.id===x.id?x:e)); saveGeneric("saveCollection","collection",x); };
+  const handleDeleteCollection = (id) => { setCollections(p=>p.filter(e=>e.id!==id)); jsonpCall({action:"deleteCollection",id}).catch(e=>console.error(e)); };
+  const handleSaveSettings = (s) => { setSettings(prev=>({...prev,...s})); jsonpCall({action:"saveSettings",settings:JSON.stringify(s)}).then(()=>alert("✅ تم الحفظ")).catch(e=>console.error(e)); };
+  const handleSaveUser = async (u) => {
+    setUsersList(prev=>{const i=prev.findIndex(x=>x.id===u.id);if(i>=0){const n=[...prev];n[i]=u;return n;}return[...prev,u];});
+    try { await jsonpCall({action:"saveUser",user:JSON.stringify(u)}); alert("✅ تم حفظ "+u.name); } catch(e){ alert("❌ مشكلة في الحفظ"); }
+  };
+  const handleSaveInstances = (list) => { setInstances(list); jsonpCall({action:"saveSettings",settings:JSON.stringify({instances:list})}).catch(e=>console.error(e)); };
+  const handleSaveFunnel = (list) => { setFunnel(list); jsonpCall({action:"saveSettings",settings:JSON.stringify({funnelStatuses:list})}).catch(e=>console.error(e)); };
+  const handleSaveAuto = (autoObj, tgtObj) => {
+    setAutoCfg(autoObj); setTargets(tgtObj); setSlaHours(Number(autoObj.slaHours)||2);
+    jsonpCall({action:"saveSettings",settings:JSON.stringify({autoCfg:autoObj,targets:tgtObj,slaHours:Number(autoObj.slaHours)||2})})
+      .then(()=>alert("✅ تم حفظ الأتمتة والتارجت")).catch(e=>alert("❌ مشكلة في الحفظ"));
+  };
+  const handleSaveQR = (q) => { setQuickReplies(p=>[...p,q]); jsonpCall({action:"saveQuickReply",qr:JSON.stringify(q)}).catch(e=>console.error(e)); };
+  const handleDeleteQR = (id) => { setQuickReplies(p=>p.filter(q=>q.id!==id)); jsonpCall({action:"deleteQuickReply",id}).catch(e=>console.error(e)); };
+
+  // تحويل شات لليد
+  const createLeadFromChat = (chat) => {
+    const phone = chatIdToPhone(chat.chat_id);
+    const isEG = phone.startsWith("20");
+    setEditLead({
+      id:Date.now().toString(),
+      clientName: chat.name||"",
+      phone: phone.replace(/^966|^20/,""),
+      phoneCountry: isEG?"+20":"+966",
+      source:"واتساب",
+      teleStage:"new_lead", salesStage:null, priority:"medium",
+      currency:"SAR", followUpDate:today(), createdAt:today(), updatedAt:today(),
+      activityLog:[], _fromChat: chat.chat_id
+    });
+    setShowLeadModal(true);
+    setTab("leads");
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={login}/>;
+
+  const visibleLeads = leads.filter(l=>{
+    if (can.allLeads(currentUser)) return true;
+    if (currentUser.role==="outreach") return l.teleAgent===currentUser.id;
+    if (currentUser.role==="sales") return l.salesAgent===currentUser.id||l.teleStage==="meeting_booked";
+    return l.teleAgent===currentUser.id||l.salesAgent===currentUser.id;
+  });
+
+  const filteredLeads = visibleLeads.filter(l=>{
+    const q=search.toLowerCase();
+    const mq=!q || (l.clientName||"").toLowerCase().includes(q) || (l.phone||"").includes(q) || (l.dmName||"").toLowerCase().includes(q);
+    return mq
+      && (!fNiche||l.niche===fNiche)
+      && (!fSource||l.source===fSource)
+      && (!fPriority||l.priority===fPriority)
+      && (!fTeleStage||l.teleStage===fTeleStage)
+      && (!fSalesStage||l.salesStage===fSalesStage);
+  });
+
+  const leadAlerts = visibleLeads.flatMap(getLeadAlerts);
+  const renewalAlerts = (can.renewals(currentUser)?renewals:[]).map(getRenewalAlert).filter(Boolean);
+  const alertCount = leadAlerts.length + renewalAlerts.length;
+
+  const TABS=[
+    {id:"dashboard",label:"📊 Dashboard",show:true},
+    {id:"leads",label:"👥 الليدز",show:true},
+    {id:"pipeline",label:"🔄 البايبلاين",show:true},
+    {id:"whatsapp",label:waUnread>0?`💬 واتساب (${waUnread})`:"💬 واتساب",show:can.whatsapp(currentUser)},
+    {id:"renewals",label:"🔁 التجديدات",show:can.renewals(currentUser)},
+    {id:"finance",label:"💼 الحسابات",show:can.finance(currentUser)},
+    {id:"rules",label:"⚙️ Rules",show:can.rules(currentUser)},
+  ].filter(t=>t.show);
+
+  const filterSel = (val,setVal,opts,placeholder) => (
+    <select value={val} onChange={e=>setVal(e.target.value)} style={{...inputS,width:"auto",minWidth:120,padding:"8px 10px",fontSize:12}}>
+      <option value="">{placeholder}</option>
+      {opts.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+    </select>
+  );
+
+  return (
+    <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"'Segoe UI',Tahoma,Arial,sans-serif",direction:"rtl"}}>
+      <div style={{background:T.primary,padding:"0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(30,27,75,0.25)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,overflow:"hidden"}}>
+          <div style={{fontWeight:800,fontSize:16,color:"#fff",whiteSpace:"nowrap"}}>🚀 Falak</div>
+          <div className="header-tabs" style={{display:"flex",gap:2}}>
+            {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"6px 13px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:tab===t.id?"rgba(255,255,255,0.18)":"transparent",color:tab===t.id?"#fff":"rgba(255,255,255,0.6)"}}>{t.label}</button>)}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {alertCount>0 && <button onClick={()=>setShowAlerts(true)} style={{background:"#dc2626",border:"none",color:"#fff",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>🔔 {alertCount}</button>}
+          {loading&&<span style={{color:"rgba(255,255,255,0.7)",fontSize:11}}>⏳</span>}
+          <button onClick={()=>loadAll(currentUser)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:12}}>🔄</button>
+          <div className="hide-mobile" style={{textAlign:"left"}}>
+            <div style={{color:"#fff",fontSize:12,fontWeight:700}}>{currentUser.name}</div>
+            <div style={{color:"rgba(255,255,255,0.5)",fontSize:10}}>{ROLES[currentUser.role]?.label}</div>
+          </div>
+          <button onClick={logout} style={{background:"rgba(220,38,38,0.25)",border:"none",color:"#fca5a5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12}}>خروج</button>
+        </div>
+      </div>
+
+      <div style={{padding:"20px 16px",maxWidth:1400,margin:"0 auto"}}>
+        {tab==="dashboard"&&<Dashboard leads={visibleLeads} renewals={can.renewals(currentUser)?renewals:[]} user={currentUser} period={period} setPeriod={setPeriod} targets={targets}/>}
+
+        {tab==="leads"&&(
+          <div>
+            <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
+              <h2 style={{margin:0,fontSize:17,color:T.text}}>الليدز ({filteredLeads.length})</h2>
+              <div style={{flex:1}}/>
+              {currentUser.role==="manager"&&<button onClick={()=>{
+                const cols=["id","clientName","phone","phoneCountry","email","niche","source","storeUrl","teleStage","salesStage","priority","budget","currency","followUpDate","createdAt"];
+                const head=["ID","الاسم","الهاتف","الكود","الإيميل","النيتش","المصدر","المتجر","مرحلة أوتريتش","مرحلة سيلز","الأولوية","الميزانية","العملة","المتابعة","الإضافة"];
+                const rows=filteredLeads.map(l=>cols.map(k=>'"'+String(l[k]||"").replace(/"/g,'""')+'"').join(","));
+                const csv="\uFEFF"+head.join(",")+"\n"+rows.join("\n");
+                const a=document.createElement("a");
+                a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+                a.download="maawan-leads-"+today()+".csv"; a.click();
+              }} style={{...btnGhost,fontSize:12}}>⬇️ CSV</button>}
+              <button onClick={()=>{setEditLead(null);setShowLeadModal(true);}} style={btnPrimary}>➕ إضافة ليد</button>
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",background:T.card,padding:"12px 14px",borderRadius:12,boxShadow:T.shadow}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 بحث بالاسم أو الرقم..." style={{...inputS,width:"auto",minWidth:180,padding:"8px 12px",fontSize:12}}/>
+              {filterSel(fNiche,setFNiche,NICHES,"كل النيتشات")}
+              {filterSel(fSource,setFSource,SOURCES,"كل المصادر")}
+              {filterSel(fPriority,setFPriority,[{value:"high",label:"🔴 عالي"},{value:"medium",label:"🟡 متوسط"},{value:"low",label:"🟢 منخفض"}],"كل الأولويات")}
+              {filterSel(fTeleStage,setFTeleStage,TELE_STAGES.map(s=>({value:s.id,label:s.label})),"مراحل الأوتريتش")}
+              {filterSel(fSalesStage,setFSalesStage,SALES_STAGES.map(s=>({value:s.id,label:s.label})),"مراحل السيلز")}
+              {(fNiche||fSource||fPriority||fTeleStage||fSalesStage||search)&&(
+                <button onClick={()=>{setSearch("");setFNiche("");setFSource("");setFPriority("");setFTeleStage("");setFSalesStage("");}} style={{...btnGhost,padding:"7px 14px",fontSize:12,color:T.danger}}>✕ مسح الفلاتر</button>
+              )}
+            </div>
+            <div style={{background:T.card,borderRadius:14,overflow:"hidden",boxShadow:T.shadow}}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr style={{background:"#f8fafc",color:T.textSoft,fontSize:11}}>
+                    <th style={{textAlign:"right",padding:"11px 14px"}}>العميل</th>
+                    {can.allLeads(currentUser)&&<th className="hide-mobile" style={{textAlign:"right",padding:"11px 14px"}}>التواصل</th>}
+                    <th style={{textAlign:"right",padding:"11px 14px"}}>أوتريتش</th>
+                    <th style={{textAlign:"right",padding:"11px 14px"}}>سيلز</th>
+                    <th className="hide-mobile" style={{textAlign:"right",padding:"11px 14px"}}>الأولوية</th>
+                    <th style={{textAlign:"right",padding:"11px 14px"}}>الموعد القادم</th>
+                    <th style={{padding:"11px 14px"}}></th>
+                  </tr></thead>
+                  <tbody>
+                    {filteredLeads.length===0&&<tr><td colSpan={7} style={{padding:40,textAlign:"center",color:T.textMuted}}>{loading?"⏳ جارٍ التحميل...":"لا يوجد ليدز مطابقة"}</td></tr>}
+                    {filteredLeads.map(l=><LeadRow key={l.id} lead={l} user={currentUser} showFull={can.allLeads(currentUser)} onEdit={l=>{setEditLead(l);setShowLeadModal(true);}} onActivity={setActivityLead} onQuickSend={can.whatsapp(currentUser)?setQuickSendLead:null}/>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab==="pipeline"&&(
+          <div>
+            <h2 style={{margin:"0 0 16px",fontSize:17}}>🔄 البايبلاين</h2>
+            {[{title:"📞 الأوتريتش",stages:TELE_STAGES,key:"teleStage"},{title:"💼 السيلز",stages:SALES_STAGES,key:"salesStage"}].map(sec=>(
+              <div key={sec.title}>
+                <p style={{color:T.textSoft,fontSize:13,margin:"14px 0 10px",fontWeight:700}}>{sec.title}</p>
+                <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:14}}>
+                  {sec.stages.map(stage=>{
+                    const sl=visibleLeads.filter(l=>l[sec.key]===stage.id);
+                    return <div key={stage.id} style={{minWidth:175,background:T.card,borderRadius:12,padding:12,borderTop:`3px solid ${stage.color}`,flexShrink:0,boxShadow:T.shadow}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <span style={{color:stage.color,fontSize:12,fontWeight:700}}>{stage.icon} {stage.label}</span>
+                        <span style={{background:stage.color+"15",color:stage.color,borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{sl.length}</span>
+                      </div>
+                      {sl.map(l=>{
+                        const urgent = getLeadAlerts(l).some(a=>["overdue","today"].includes(a.level));
+                        return <div key={l.id} onClick={()=>{setEditLead(l);setShowLeadModal(true);}} style={{background:urgent?"#fef2f2":"#f8fafc",borderRadius:8,padding:"9px 10px",marginBottom:7,cursor:"pointer",border:`1px solid ${urgent?"#fecaca":T.cardBorder}`}}>
+                          <div style={{color:urgent?T.danger:T.text,fontSize:12,fontWeight:700}}>{urgent&&"🔴 "}{can.allLeads(currentUser)?l.clientName:`#${l.id}`}</div>
+                          <div style={{color:T.textMuted,fontSize:10,marginTop:2}}>{l.niche}</div>
+                        </div>;
+                      })}
+                    </div>;
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab==="whatsapp"&&can.whatsapp(currentUser)&&(
+          <WhatsAppTab user={currentUser} instances={instances} funnel={funnel} quickReplies={quickReplies} leads={leads} slaHours={slaHours}
+            onOpenLead={l=>{setEditLead(l);setShowLeadModal(true);}}
+            onCreateLeadFromChat={createLeadFromChat}/>
+        )}
+
+        {tab==="renewals"&&can.renewals(currentUser)&&(
+          <RenewalsTab renewals={renewals} user={currentUser}
+            onEdit={r=>{setEditRenewal(r);setShowRenewalModal(true);}}
+            onAdd={()=>{setEditRenewal(null);setShowRenewalModal(true);}}/>
+        )}
+
+        {tab==="finance"&&can.finance(currentUser)&&(
+          <FinanceTab expenses={expenses} collections={collections} settings={settings}
+            onAddExpense={handleAddExpense} onEditExpense={handleEditExpense} onDeleteExpense={handleDeleteExpense}
+            onAddCollection={handleAddCollection} onEditCollection={handleEditCollection} onDeleteCollection={handleDeleteCollection}
+            onSaveSettings={handleSaveSettings} period={period} setPeriod={setPeriod}/>
+        )}
+
+        {tab==="rules"&&can.rules(currentUser)&&(
+          <RulesTab users={usersList} instances={instances} funnel={funnel} quickReplies={quickReplies}
+            autoCfg={autoCfg} targets={targets}
+            onSaveUser={handleSaveUser} onSaveInstances={handleSaveInstances} onSaveFunnel={handleSaveFunnel}
+            onSaveQR={handleSaveQR} onDeleteQR={handleDeleteQR} onSaveAuto={handleSaveAuto}/>
+        )}
+      </div>
+
+      {showLeadModal&&<LeadModal lead={editLead} user={currentUser} allLeads={leads} onSave={(l)=>{
+        handleSaveLead(l);
+        if (l._fromChat) jsonpCall({action:"linkChat",chatId:l._fromChat,leadId:l.id}).catch(e=>console.error(e));
+      }} onClose={()=>{setShowLeadModal(false);setEditLead(null);}}/>}
+      {activityLead&&<ActivityModal lead={activityLead} user={currentUser} onAddActivity={handleActivity} onClose={()=>setActivityLead(null)}/>}
+      {showRenewalModal&&<RenewalModal renewal={editRenewal} user={currentUser} onSave={handleSaveRenewal} onClose={()=>{setShowRenewalModal(false);setEditRenewal(null);}}/>}
+      {quickSendLead&&<QuickSendModal lead={quickSendLead} user={currentUser} instances={instances} quickReplies={quickReplies}
+        onSent={(summary)=>handleActivity(quickSendLead.id,{date:today(),agent:currentUser.name,action:"📤 واتساب: "+summary.slice(0,120)})}
+        onClose={()=>setQuickSendLead(null)}/>}
+      {showAlerts&&<AlertsPopup alerts={leadAlerts} renewalAlerts={renewalAlerts} onClose={()=>setShowAlerts(false)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
