@@ -315,15 +315,18 @@ function getPeriodItems(items, period, dateKey) {
     return true;
   });
 }
-function jsonpCall(params) {
+function jsonpOnce(params) {
   return new Promise((resolve, reject) => {
     const cbName = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
     const script = document.createElement("script");
     const timeout = setTimeout(() => {
-      delete window[cbName];
+      // الرد المتأخر لا يسبب خطأ
+      window[cbName] = () => {
+        delete window[cbName];
+      };
       if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error("timeout"));
-    }, 25000);
+    }, 60000);
     window[cbName] = data => {
       clearTimeout(timeout);
       delete window[cbName];
@@ -342,6 +345,61 @@ function jsonpCall(params) {
     document.head.appendChild(script);
   });
 }
+// إعادة المحاولة مرة واحدة للتحميل والحفظ
+const RETRY_ACTIONS = ["getAll", "saveLead"];
+function jsonpCall(params) {
+  const p = jsonpOnce(params);
+  if (!params || !RETRY_ACTIONS.includes(params.action)) return p;
+  return p.catch(() => new Promise(r => setTimeout(r, 1500)).then(() => jsonpOnce(params)));
+}
+// طابور حفظ لكل عميل: طلب يخلص قبل ما التالي يبدأ
+const LEAD_Q = {};
+function queueLeadSave(lead) {
+  const id = lead.id;
+  const q = LEAD_Q[id] || (LEAD_Q[id] = {
+    chain: Promise.resolve(),
+    latest: null,
+    n: 0
+  });
+  q.latest = lead;
+  q.n++;
+  const run = () => jsonpCall({
+    action: "saveLead",
+    lead: JSON.stringify(lead)
+  }).then(r => {
+    if (!r || !r.success) throw new Error(r && r.error || "save failed");
+    return r;
+  });
+  const p = q.chain.then(run, run);
+  q.chain = p.catch(() => {});
+  const done = () => {
+    q.n--;
+    if (q.n === 0 && LEAD_Q[id] === q) delete LEAD_Q[id];
+  };
+  p.then(done, done);
+  return p;
+}
+function pendingLead(id) {
+  return LEAD_Q[id] ? LEAD_Q[id].latest : null;
+}
+// التغييرات اللي لسه بتتحفظ لا يكتب فوقها تحميل قديم
+function mergePendingLeads(list) {
+  const ids = new Set(list.map(l => l.id));
+  const merged = list.map(l => pendingLead(l.id) || l);
+  const extra = Object.keys(LEAD_Q).map(k => LEAD_Q[k].latest).filter(l => l && !ids.has(l.id));
+  return [...extra, ...merged];
+}
+function patchLeadCache(userId, lead) {
+  try {
+    const k = "maawan_cache_" + userId;
+    const c = JSON.parse(localStorage.getItem(k) || "null");
+    if (!c || !Array.isArray(c.leads)) return;
+    const i = c.leads.findIndex(l => l.id === lead.id);
+    if (i >= 0) c.leads[i] = lead;else c.leads.unshift(lead);
+    localStorage.setItem(k, JSON.stringify(c));
+  } catch (e) {}
+}
+const SAVE_FAIL_MSG = name => "⚠️ لم يتم حفظ التعديل" + (name ? " (" + name + ")" : "") + " — تحقق من الاتصال وحاول مرة أخرى";
 
 // تنبيهات المواعيد
 function getLeadAlerts(lead) {
@@ -5795,6 +5853,7 @@ function App() {
   const [targets, setTargets] = useState({});
   const [autoCfg, setAutoCfg] = useState({});
   const [loading, setLoading] = useState(false);
+  const [stale, setStale] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [fNiche, setFNiche] = useState("");
@@ -5822,8 +5881,11 @@ function App() {
         userId: user.id,
         role: user.role
       });
+      if (!data || !data.success) throw new Error(data && data.error || "getAll failed");
       if (data.success) {
-        setLeads(data.leads || []);
+        data.leads = mergePendingLeads(data.leads || []);
+        setStale(false);
+        setLeads(data.leads);
         setRenewals(data.renewals || []);
         if (data.users) {
           setUsersList(data.users);
@@ -5850,8 +5912,9 @@ function App() {
       console.error("loadAll:", e);
       try {
         const c = JSON.parse(localStorage.getItem("maawan_cache_" + user.id) || "null");
+        setStale(true);
         if (c) {
-          setLeads(c.leads || []);
+          setLeads(mergePendingLeads(c.leads || []));
           setRenewals(c.renewals || []);
           setExpenses(c.expenses || []);
           setCollections(c.collections || []);
@@ -5921,7 +5984,11 @@ function App() {
     });
     setShowLeadModal(false);
     setEditLead(null);
-    saveGeneric("saveLead", "lead", updated);
+    patchLeadCache(currentUser.id, updated);
+    queueLeadSave(updated).then(() => setTimeout(() => loadAll(currentUser), 2000)).catch(e => {
+      console.error("saveLead", e);
+      alert(SAVE_FAIL_MSG(updated.clientName));
+    });
   };
   const handleActivity = (leadId, entry) => {
     setLeads(prev => prev.map(l => l.id === leadId ? {
@@ -6079,17 +6146,18 @@ function App() {
   };
   const handleInlineStage = async (lead, field, value) => {
     const updated = {
-      ...lead,
+      ...(pendingLead(lead.id) || lead),
       [field]: value || null,
       updatedAt: today()
     };
     setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+    patchLeadCache(currentUser.id, updated);
     try {
-      await jsonpCall({
-        action: "saveLead",
-        lead: JSON.stringify(updated)
-      });
-    } catch (e) {}
+      await queueLeadSave(updated);
+    } catch (e) {
+      console.error("saveLead", e);
+      alert(SAVE_FAIL_MSG(updated.clientName));
+    }
   };
   const handleImportCSV = async file => {
     if (!file) return;
@@ -6384,7 +6452,17 @@ function App() {
       color: "rgba(255,255,255,0.7)",
       fontSize: 11
     }
-  }, "⏳"), /*#__PURE__*/React.createElement("button", {
+  }, "⏳"), stale && !loading && /*#__PURE__*/React.createElement("span", {
+    title: "تعذّر التحميل من السيرفر — المعروض نسخة محفوظة على الجهاز",
+    style: {
+      background: "#f59e0b",
+      color: "#1f2937",
+      borderRadius: 20,
+      padding: "4px 10px",
+      fontSize: 11,
+      fontWeight: 800
+    }
+  }, "⚠️ بيانات قديمة — اضغط تحديث"), /*#__PURE__*/React.createElement("button", {
     onClick: () => loadAll(currentUser),
     style: {
       background: "rgba(255,255,255,0.12)",
