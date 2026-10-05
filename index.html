@@ -76,7 +76,7 @@ const ROLES = {
 };
 const PERM_DEFS = [{
   key: "allLeads",
-  label: "يشوف كل العملاء المحتملون"
+  label: "عرض جميع العملاء المحتملين"
 }, {
   key: "whatsapp",
   label: "يستخدم الواتساب"
@@ -105,7 +105,7 @@ can.seeAllRenewals = u => can.allChats(u) || ["manager", "sales_manager", "am_te
 can.rules = u => u?.role === "manager";
 const TELE_STAGES = [{
   id: "new_lead",
-  label: "عميل محتمل",
+  label: "جديد",
   color: "#4f46e5",
   icon: "🎯"
 }, {
@@ -166,17 +166,17 @@ const SALES_STAGES = [{
   icon: "⚖️"
 }, {
   id: "follow_up_s1",
-  label: "متابعة فريق المبيعات ١",
+  label: "متابعة بيعية أولى",
   color: "#ea580c",
   icon: "🔄"
 }, {
   id: "follow_up_s2",
-  label: "متابعة فريق المبيعات ٢",
+  label: "متابعة بيعية ثانية",
   color: "#f59e0b",
   icon: "🔁"
 }, {
   id: "follow_up_s3",
-  label: "متابعة فريق المبيعات ٣",
+  label: "متابعة بيعية ثالثة",
   color: "#eab308",
   icon: "♻️"
 }, {
@@ -892,7 +892,7 @@ function AlertsPopup({
       width: "100%",
       marginTop: 12
     }
-  }, "تمام، فهمت ✅"));
+  }, "تم الاطلاع ✅"));
 }
 function LeadModal({
   lead,
@@ -947,8 +947,18 @@ function LeadModal({
   }));
   const checkDuplicate = () => {
     const myPhone = normPhone(form.phone);
-    if (!myPhone) return null;
-    return (allLeads || []).find(l => l.id !== form.id && normPhone(l.phone) === myPhone);
+    const myName = (form.clientName || "").trim().toLowerCase();
+    const byPhone = myPhone ? (allLeads || []).find(l => l.id !== form.id && normPhone(l.phone) === myPhone) : null;
+    if (byPhone) return {
+      lead: byPhone,
+      kind: "الرقم"
+    };
+    const byName = myName ? (allLeads || []).find(l => l.id !== form.id && (l.clientName || "").trim().toLowerCase() === myName) : null;
+    if (byName) return {
+      lead: byName,
+      kind: "الاسم"
+    };
+    return null;
   };
   const handleSave = () => {
     if (!form.clientName || !form.phone) {
@@ -957,14 +967,14 @@ function LeadModal({
     }
     const dup = checkDuplicate();
     if (dup) {
-      setDupWarn(`🚫 العميل محتمل مكرر! الرقم ده موجود بالفعل مع العميل "${dup.clientName}" (ID: ${dup.id}) — مش هينفع يتحفظ`);
+      setDupWarn(`🚫 لا يمكن الحفظ — ${dup.kind} مكرر ومسجّل مسبقاً للعميل "${dup.lead.clientName}" (رقم ${dup.lead.id})`);
       return;
     }
     const log = [...(form.activityLog || [])];
     if (isNew) log.push({
       date: today(),
       agent: user.name,
-      action: "تم إضافة العميل محتمل"
+      action: "تمت إضافة العميل"
     });
     onSave({
       ...form,
@@ -1076,7 +1086,7 @@ function LeadModal({
     country: form.dmPhoneCountry,
     onPhone: v => set("dmPhone", v),
     onCountry: v => set("dmPhoneCountry", v)
-  })), sel("البوزيشن", "dmPosition", POSITIONS_DM))), /*#__PURE__*/React.createElement("div", {
+  })), sel("المنصب", "dmPosition", POSITIONS_DM))), /*#__PURE__*/React.createElement("div", {
     style: secStyle("#f0f9ff", "#bae6fd")
   }, secTitle("#0369a1", "🔍 تحليل المتجر والخدمات"), ta("ما يحتاجه المتجر", "storeNeeds"), ta("تحليل المتجر", "storeAnalysis"), ta("خطة الحلول", "solutionPlan"), ta("ملاحظات", "notes")), /*#__PURE__*/React.createElement("div", {
     style: secStyle(T.warnBg, "#fde68a")
@@ -1084,21 +1094,21 @@ function LeadModal({
     style: grid2
   }, inp("موعد المتابعة القادمة", "followUpDate", "date"), inp("موعد الاجتماع", "meetingDate", "date"), inp("موعد إرسال العرض", "proposalDate", "date"), inp("موعد تقفيل العقد", "closingDate", "date"))), /*#__PURE__*/React.createElement("div", {
     style: secStyle(T.okBg, "#a7f3d0")
-  }, secTitle(T.ok, "🔄 مسار المبيعات والمسؤولين"), /*#__PURE__*/React.createElement("div", {
+  }, secTitle(T.ok, "🔄 المراحل والمسؤولون"), /*#__PURE__*/React.createElement("div", {
     style: grid2
   }, sel("مرحلة الاستقطاب", "teleStage", TELE_STAGES.map(s => ({
     value: s.id,
     label: `${s.icon} ${s.label}`
-  }))), sel("مرحلة الفريق المبيعات", "salesStage", [{
+  }))), sel("مرحلة المبيعات", "salesStage", [{
     value: "",
     label: "— لم يبدأ —"
   }, ...SALES_STAGES.map(s => ({
     value: s.id,
     label: `${s.icon} ${s.label}`
-  }))]), sel("الاستقطاب المسؤول", "teleAgent", USERS.filter(u => u.role === "outreach").map(u => ({
+  }))]), sel("مسؤول الاستقطاب", "teleAgent", USERS.filter(u => u.role === "outreach").map(u => ({
     value: u.id,
     label: u.name
-  }))), sel("الفريق المبيعات المسؤول", "salesAgent", [{
+  }))), sel("مسؤول المبيعات", "salesAgent", [{
     value: "",
     label: "— لم يُعيَّن —"
   }, ...USERS.filter(u => ["sales", "team_leader_sales", "sales_manager"].includes(u.role)).map(u => ({
@@ -1455,7 +1465,7 @@ function ExpenseModal({
   }, /*#__PURE__*/React.createElement("input", {
     value: form.label,
     onChange: e => set("label", e.target.value),
-    placeholder: "مثال: مرتب فريق المبيعات ١",
+    placeholder: "مثال: راتب مسؤول مبيعات",
     style: inputS
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2645,7 +2655,7 @@ function Dashboard({
     label: "الربع"
   }, {
     id: "half",
-    label: "نص السنة"
+    label: "نصف السنة"
   }, {
     id: "yearly",
     label: "السنة"
@@ -2693,7 +2703,7 @@ function Dashboard({
       fontWeight: 800,
       margin: "0 0 10px"
     }
-  }, "🔔 تنبيهات النهارده (", allAlerts.length + renewAlerts.length, ")"), allAlerts.slice(0, 6).map((a, i) => /*#__PURE__*/React.createElement("div", {
+  }, "🔔 تنبيهات اليوم (", allAlerts.length + renewAlerts.length, ")"), allAlerts.slice(0, 6).map((a, i) => /*#__PURE__*/React.createElement("div", {
     key: "a" + i,
     style: {
       color: "#7f1d1d",
@@ -2720,22 +2730,22 @@ function Dashboard({
       marginBottom: 18
     }
   }, /*#__PURE__*/React.createElement(StatCard, {
-    label: "إجمالي العملاء المحتملون",
+    label: "إجمالي العملاء المحتملين",
     value: pl.length,
     icon: "🎯",
     color: T.accent
   }), /*#__PURE__*/React.createElement(StatCard, {
-    label: "اجتماعات محجوزة",
+    label: "اجتماعات مجدولة",
     value: meetings.length,
     icon: "📅",
     color: "#7c3aed"
   }), /*#__PURE__*/React.createElement(StatCard, {
-    label: "صفقات مغلقة",
+    label: "عقود مُبرمة",
     value: won.length,
     icon: "🏆",
     color: T.ok
   }), /*#__PURE__*/React.createElement(StatCard, {
-    label: "لم يتحوّلها",
+    label: "غير مُحوَّلة",
     value: lost.length,
     icon: "💔",
     color: T.danger
@@ -2819,7 +2829,7 @@ function Dashboard({
       margin: "0 0 12px",
       fontWeight: 700
     }
-  }, "توزيع مراحل الفريق المبيعات"), salesDist.length === 0 && /*#__PURE__*/React.createElement("p", {
+  }, "توزيع مراحل المبيعات"), salesDist.length === 0 && /*#__PURE__*/React.createElement("p", {
     style: {
       color: T.textMuted,
       fontSize: 12
@@ -2899,12 +2909,12 @@ function Dashboard({
       textAlign: "right",
       padding: "8px 12px"
     }
-  }, "البوزيشن"), /*#__PURE__*/React.createElement("th", {
+  }, "المنصب"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right",
       padding: "8px 12px"
     }
-  }, "عميل محتملز"), /*#__PURE__*/React.createElement("th", {
+  }, "العملاء"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right",
       padding: "8px 12px"
@@ -2955,11 +2965,11 @@ function Dashboard({
     const ml = getPeriodItems(leads, "monthly", "createdAt").filter(l => l.teleAgent === user.id || l.salesAgent === user.id);
     const tg = targets[user.id];
     const rows = [{
-      label: "📅 اجتماعات محجوزة",
+      label: "📅 اجتماعات مجدولة",
       val: ml.filter(l => l.teleStage === "meeting_booked").length,
       target: Number(tg.meetings || 0)
     }, {
-      label: "🏆 صفقات مغلقة",
+      label: "🏆 عقود مُبرمة",
       val: ml.filter(l => l.salesStage === "won").length,
       target: Number(tg.won || 0)
     }].filter(r => r.target > 0);
@@ -3020,96 +3030,6 @@ function Dashboard({
         }
       })));
     }));
-  })(), pl.length > 0 && (() => {
-    const groupRates = key => {
-      const groups = {};
-      pl.forEach(l => {
-        const k = l[key] || "غير محدد";
-        groups[k] = groups[k] || {
-          total: 0,
-          meet: 0,
-          won: 0
-        };
-        groups[k].total++;
-        if (l.teleStage === "meeting_booked" || l.salesStage) groups[k].meet++;
-        if (l.salesStage === "won") groups[k].won++;
-      });
-      return Object.entries(groups).sort((a, b) => b[1].total - a[1].total).slice(0, 6);
-    };
-    const bySource = groupRates("source"),
-      byNiche = groupRates("niche");
-    const rateRow = ([name, g], i) => /*#__PURE__*/React.createElement("div", {
-      key: i,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 8,
-        fontSize: 12
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        minWidth: 110,
-        color: T.text,
-        fontWeight: 600,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, name), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: T.textMuted,
-        minWidth: 44
-      }
-    }, g.total, " عميل محتمل"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: "#7c3aed",
-        fontWeight: 700,
-        minWidth: 80
-      }
-    }, "📅 ", g.total ? Math.round(g.meet / g.total * 100) : 0, "% اجتماع"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: T.ok,
-        fontWeight: 800,
-        minWidth: 70
-      }
-    }, "🏆 ", g.total ? Math.round(g.won / g.total * 100) : 0, "% إغلاق"));
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-        gap: 14,
-        marginTop: 14
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: T.card,
-        borderRadius: 14,
-        padding: 18,
-        boxShadow: T.shadow
-      }
-    }, /*#__PURE__*/React.createElement("p", {
-      style: {
-        color: T.textSoft,
-        fontSize: 12,
-        margin: "0 0 12px",
-        fontWeight: 700
-      }
-    }, "📈 معدل التحويل حسب المصدر"), bySource.map(rateRow)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: T.card,
-        borderRadius: 14,
-        padding: 18,
-        boxShadow: T.shadow
-      }
-    }, /*#__PURE__*/React.createElement("p", {
-      style: {
-        color: T.textSoft,
-        fontSize: 12,
-        margin: "0 0 12px",
-        fontWeight: 700
-      }
-    }, "📈 معدل التحويل حسب النيتش"), byNiche.map(rateRow)));
   })(), can.allLeads(user) && targets && Object.keys(targets).some(k => k !== "company") && (() => {
     const ml = getPeriodItems(leads, "monthly", "createdAt");
     const rows = USERS.filter(u => u.role !== "manager" && targets[u.id] && (Number(targets[u.id].meetings || 0) > 0 || Number(targets[u.id].won || 0) > 0));
@@ -3269,7 +3189,7 @@ function Dashboard({
       style: {
         padding: "6px 8px"
       }
-    }, "عميل محتملز"), /*#__PURE__*/React.createElement("th", {
+    }, "العملاء"), /*#__PURE__*/React.createElement("th", {
       style: {
         padding: "6px 8px"
       }
@@ -3277,7 +3197,7 @@ function Dashboard({
       style: {
         padding: "6px 8px"
       }
-    }, "قفل"), /*#__PURE__*/React.createElement("th", {
+    }, "إغلاق"), /*#__PURE__*/React.createElement("th", {
       style: {
         padding: "6px 8px"
       }
@@ -3763,7 +3683,7 @@ function WhatsAppTab({
         whiteSpace: "nowrap"
       }
     }, lead?.clientName || c.name || chatIdToPhone(c.chat_id)), lead && /*#__PURE__*/React.createElement("span", {
-      title: "مربوط بعميل محتمل",
+      title: "مرتبط بعميل",
       style: {
         fontSize: 10
       }
@@ -3848,7 +3768,7 @@ function WhatsAppTab({
       color: T.textMuted,
       fontSize: 13
     }
-  }, "مفيش رسايل مجدولة — من زرار 💬 عند أي عميل محتمل تقدر تحدد وقت للإرسال"), schedList.map(s => /*#__PURE__*/React.createElement("div", {
+  }, "مفيش رسايل مجدولة — من زر 💬 بجوار أي عميل تقدر تحدد وقت للإرسال"), schedList.map(s => /*#__PURE__*/React.createElement("div", {
     key: s.id,
     style: {
       background: T.accentBg,
@@ -4023,7 +3943,7 @@ function WhatsAppTab({
       background: T.accentBg,
       fontWeight: 700
     }
-  }, "🔗 فتح العميل محتمل") : /*#__PURE__*/React.createElement("button", {
+  }, "🔗 فتح ملف العميل") : /*#__PURE__*/React.createElement("button", {
     onClick: () => onCreateLeadFromChat(activeChat),
     style: {
       ...btnGhost,
@@ -4260,7 +4180,7 @@ function RulesTab({
     label: "⚡ السكربتات"
   }, {
     id: "auto",
-    label: "🤖 الأتمتة والهدف"
+    label: "🤖 الأتمتة والأهداف"
   }];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4350,7 +4270,7 @@ function RulesTab({
         direction: "ltr"
       }
     })), /*#__PURE__*/React.createElement(Field, {
-      label: "البوزيشن"
+      label: "المنصب"
     }, /*#__PURE__*/React.createElement("select", {
       value: u.role,
       onChange: e => setU(id, {
@@ -4744,7 +4664,7 @@ function RulesTab({
     style: inputS,
     placeholder: "مثال: رسالة الافتتاح"
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "🎯 مرتبط بمرحلة (السكربت هيظهر للموظف أول حاجة لما العميل محتمل في المرحلة دي)"
+    label: "🎯 مرتبط بمرحلة (السكربت هيظهر للموظف أول حاجة لما العميل يكون في المرحلة دي)"
   }, /*#__PURE__*/React.createElement("select", {
     value: newQR.stage,
     onChange: e => setNewQR(q => ({
@@ -4760,7 +4680,7 @@ function RulesTab({
     key: s.id,
     value: s.id
   }, s.icon, " ", s.label))), /*#__PURE__*/React.createElement("optgroup", {
-    label: "مراحل الفريق المبيعات"
+    label: "مراحل المبيعات"
   }, SALES_STAGES.map(s => /*#__PURE__*/React.createElement("option", {
     key: s.id,
     value: s.id
@@ -4860,7 +4780,7 @@ function RulesTab({
       color: T.text,
       marginBottom: 4
     }
-  }, "🎯 الهدف الشهري لكل موظف"), /*#__PURE__*/React.createElement("p", {
+  }, "🎯 الأهداف الشهرية لكل موظف"), /*#__PURE__*/React.createElement("p", {
     style: {
       color: T.textMuted,
       fontSize: 11,
@@ -4903,7 +4823,7 @@ function RulesTab({
       }
     }), /*#__PURE__*/React.createElement("input", {
       type: "number",
-      placeholder: "صفقات مغلقة",
+      placeholder: "عقود مُبرمة",
       value: t.won || "",
       onChange: e => setTgt(p => ({
         ...p,
@@ -5135,7 +5055,7 @@ function RulesTab({
       ...btnPrimary,
       width: "100%"
     }
-  }, "💾 حفظ كل إعدادات الأتمتة والهدف")));
+  }, "💾 حفظ كل إعدادات الأتمتة والأهداف")));
 }
 function fileToBase64(file) {
   return new Promise((res, rej) => {
@@ -5891,6 +5811,7 @@ function App() {
   const [showAlerts, setShowAlerts] = useState(false);
   const [quickSendLead, setQuickSendLead] = useState(null);
   const [detailLead, setDetailLead] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
   const [alertsShown, setAlertsShown] = useState(false);
   const loadAll = useCallback(async user => {
     if (!user) return;
@@ -6140,7 +6061,7 @@ function App() {
         targets: tgtObj,
         slaHours: Number(autoObj.slaHours) || 2
       })
-    }).then(() => alert("✅ تم حفظ الأتمتة والهدف")).catch(e => alert("❌ مشكلة في الحفظ"));
+    }).then(() => alert("✅ تم حفظ الأتمتة والأهداف")).catch(e => alert("❌ مشكلة في الحفظ"));
   };
   const handleSaveQR = q => {
     setQuickReplies(p => [...p, q]);
@@ -6155,620 +6076,760 @@ function App() {
       action: "deleteQuickReply",
       id
     }).catch(e => console.error(e));
-    const handleInlineStage = async (lead, field, value) => {
-      const updated = {
-        ...lead,
-        [field]: value || null,
-        updatedAt: today()
-      };
-      setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-      try {
-        await jsonpCall({
-          action: "saveLead",
-          lead: JSON.stringify(updated)
-        });
-      } catch (e) {}
+  };
+  const handleInlineStage = async (lead, field, value) => {
+    const updated = {
+      ...lead,
+      [field]: value || null,
+      updatedAt: today()
     };
-    // تحويل شات لعميل محتمل
-    const createLeadFromChat = chat => {
-      const phone = chatIdToPhone(chat.chat_id);
-      const isEG = phone.startsWith("20");
-      setEditLead({
-        id: Date.now().toString(),
-        clientName: chat.name || "",
-        phone: phone.replace(/^966|^20/, ""),
-        phoneCountry: isEG ? "+20" : "+966",
-        source: "واتساب",
-        teleStage: "new_lead",
-        salesStage: null,
-        priority: "medium",
-        currency: "SAR",
-        followUpDate: today(),
-        createdAt: today(),
-        updatedAt: today(),
-        activityLog: [],
-        _fromChat: chat.chat_id
+    setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+    try {
+      await jsonpCall({
+        action: "saveLead",
+        lead: JSON.stringify(updated)
       });
+    } catch (e) {}
+  };
+  const handleImportCSV = async file => {
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) {
+        alert("الملف فارغ أو لا يحتوي على بيانات");
+        setImportBusy(false);
+        return;
+      }
+      const parseLine = line => {
+        const out = [];
+        let cur = "";
+        let q = false;
+        for (const ch of line) {
+          if (ch === '"') {
+            q = !q;
+          } else if (ch === ',' && !q) {
+            out.push(cur);
+            cur = "";
+          } else cur += ch;
+        }
+        out.push(cur);
+        return out.map(v => v.trim());
+      };
+      const headers = parseLine(lines[0].replace(/^\uFEFF/, ""));
+      const MAP = {
+        "الاسم": "clientName",
+        "اسم العميل": "clientName",
+        "clientName": "clientName",
+        "Name": "clientName",
+        "name": "clientName",
+        "الهاتف": "phone",
+        "رقم الهاتف": "phone",
+        "phone": "phone",
+        "Phone": "phone",
+        "الإيميل": "email",
+        "البريد": "email",
+        "email": "email",
+        "Email": "email",
+        "النيتش": "niche",
+        "المجال": "niche",
+        "niche": "niche",
+        "المصدر": "source",
+        "source": "source",
+        "رابط المتجر": "storeUrl",
+        "المتجر": "storeUrl",
+        "storeUrl": "storeUrl",
+        "الميزانية": "budget",
+        "budget": "budget",
+        "العملة": "currency",
+        "currency": "currency",
+        "كود الدولة": "phoneCountry",
+        "phoneCountry": "phoneCountry",
+        "ملاحظات": "notes",
+        "notes": "notes",
+        "متخذ القرار": "dmName",
+        "المنصب": "dmPosition"
+      };
+      const fields = headers.map(h => MAP[h] || null);
+      if (!fields.includes("clientName") && !fields.includes("phone")) {
+        alert("لازم يكون في الملف عمود (الاسم) أو (الهاتف)");
+        setImportBusy(false);
+        return;
+      }
+      const seenPhones = new Set(leads.map(l => normPhone(l.phone)).filter(Boolean));
+      const seenNames = new Set(leads.map(l => (l.clientName || "").trim().toLowerCase()).filter(Boolean));
+      const imported = [];
+      let dups = 0;
+      lines.slice(1).forEach((line, i) => {
+        const vals = parseLine(line);
+        const obj = {
+          id: String(Date.now()) + i,
+          teleStage: "new_lead",
+          salesStage: null,
+          priority: "medium",
+          currency: "SAR",
+          phoneCountry: "+966",
+          teleAgent: currentUser.role === "outreach" ? currentUser.id : "",
+          followUpDate: today(),
+          createdAt: today(),
+          updatedAt: today(),
+          activityLog: [{
+            date: today(),
+            agent: currentUser.name,
+            action: "استيراد من ملف"
+          }]
+        };
+        fields.forEach((f, j) => {
+          if (f && vals[j]) obj[f] = vals[j];
+        });
+        if (!obj.clientName && !obj.phone) return;
+        const ph = normPhone(obj.phone),
+          nm = (obj.clientName || "").trim().toLowerCase();
+        if (ph && seenPhones.has(ph) || nm && seenNames.has(nm)) {
+          dups++;
+          return;
+        }
+        if (ph) seenPhones.add(ph);
+        if (nm) seenNames.add(nm);
+        imported.push(obj);
+      });
+      if (!imported.length) {
+        alert("لم يتم استيراد أي سجل — جميع السجلات مكررة (" + dups + ")");
+        setImportBusy(false);
+        return;
+      }
+      setLeads(prev => [...imported, ...prev]);
+      for (const ld of imported) {
+        try {
+          await jsonpCall({
+            action: "saveLead",
+            lead: JSON.stringify(ld)
+          });
+        } catch (e) {}
+      }
+      alert("✅ تم استيراد " + imported.length + " عميل" + (dups ? " — وتم تجاهل " + dups + " مكرر" : ""));
+    } catch (err) {
+      alert("❌ تعذّر قراءة الملف: " + err.message);
+    }
+    setImportBusy(false);
+  };
+  // تحويل شات لعميل محتمل
+  const createLeadFromChat = chat => {
+    const phone = chatIdToPhone(chat.chat_id);
+    const isEG = phone.startsWith("20");
+    setEditLead({
+      id: Date.now().toString(),
+      clientName: chat.name || "",
+      phone: phone.replace(/^966|^20/, ""),
+      phoneCountry: isEG ? "+20" : "+966",
+      source: "واتساب",
+      teleStage: "new_lead",
+      salesStage: null,
+      priority: "medium",
+      currency: "SAR",
+      followUpDate: today(),
+      createdAt: today(),
+      updatedAt: today(),
+      activityLog: [],
+      _fromChat: chat.chat_id
+    });
+    setShowLeadModal(true);
+    setTab("leads");
+  };
+  if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
+    onLogin: login
+  });
+  const visibleLeads = leads.filter(l => {
+    if (can.allLeads(currentUser)) return true;
+    if (currentUser.role === "outreach") return l.teleAgent === currentUser.id;
+    if (currentUser.role === "sales") return l.salesAgent === currentUser.id || l.teleStage === "meeting_booked";
+    return l.teleAgent === currentUser.id || l.salesAgent === currentUser.id;
+  });
+  const filteredLeads = visibleLeads.filter(l => {
+    const q = search.toLowerCase();
+    const mq = !q || (l.clientName || "").toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
+    return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage);
+  });
+  const leadAlerts = visibleLeads.flatMap(getLeadAlerts);
+  const renewalAlerts = (can.renewals(currentUser) ? renewals : []).map(getRenewalAlert).filter(Boolean);
+  const alertCount = leadAlerts.length + renewalAlerts.length;
+  const TABS = [{
+    id: "dashboard",
+    label: "📊 لوحة التحكم",
+    show: true
+  }, {
+    id: "leads",
+    label: "👥 العملاء المحتملون",
+    show: true
+  }, {
+    id: "pipeline",
+    label: "🔄 مسار المبيعات",
+    show: true
+  }, {
+    id: "whatsapp",
+    label: waUnread > 0 ? `💬 واتساب (${waUnread})` : "💬 واتساب",
+    show: can.whatsapp(currentUser)
+  }, {
+    id: "renewals",
+    label: "🔁 التجديدات",
+    show: can.renewals(currentUser)
+  }, {
+    id: "finance",
+    label: "💼 الحسابات",
+    show: can.finance(currentUser)
+  }, {
+    id: "rules",
+    label: "⚙️ الإعدادات والصلاحيات",
+    show: can.rules(currentUser)
+  }].filter(t => t.show);
+  const filterSel = (val, setVal, opts, placeholder) => /*#__PURE__*/React.createElement("select", {
+    value: val,
+    onChange: e => setVal(e.target.value),
+    style: {
+      ...inputS,
+      width: "auto",
+      minWidth: 120,
+      padding: "8px 10px",
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, placeholder), opts.map(o => /*#__PURE__*/React.createElement("option", {
+    key: o.value || o,
+    value: o.value || o
+  }, o.label || o)));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: T.bg,
+      color: T.text,
+      fontFamily: "'Segoe UI',Tahoma,Arial,sans-serif",
+      direction: "rtl"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.primary,
+      padding: "0 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      height: 58,
+      position: "sticky",
+      top: 0,
+      zIndex: 100,
+      boxShadow: "0 2px 12px rgba(30,27,75,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: window.FALAK_LOGO,
+    alt: "Falak",
+    style: {
+      height: 30,
+      filter: "brightness(0) invert(1)",
+      opacity: 0.95
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "header-tabs",
+    style: {
+      display: "flex",
+      gap: 2
+    }
+  }, TABS.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.id,
+    onClick: () => setTab(t.id),
+    style: {
+      padding: "6px 13px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontSize: 12,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+      background: tab === t.id ? "rgba(255,255,255,0.18)" : "transparent",
+      color: tab === t.id ? "#fff" : "rgba(255,255,255,0.6)"
+    }
+  }, t.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, alertCount > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowAlerts(true),
+    style: {
+      background: "#dc2626",
+      border: "none",
+      color: "#fff",
+      borderRadius: 20,
+      padding: "4px 12px",
+      fontSize: 12,
+      fontWeight: 800,
+      cursor: "pointer"
+    }
+  }, "🔔 ", alertCount), loading && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 11
+    }
+  }, "⏳"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => loadAll(currentUser),
+    style: {
+      background: "rgba(255,255,255,0.12)",
+      border: "none",
+      color: "#fff",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer",
+      fontSize: 12
+    }
+  }, "🔄"), /*#__PURE__*/React.createElement("div", {
+    className: "hide-mobile",
+    style: {
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 700
+    }
+  }, currentUser.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "rgba(255,255,255,0.5)",
+      fontSize: 10
+    }
+  }, ROLES[currentUser.role]?.label)), /*#__PURE__*/React.createElement("button", {
+    onClick: logout,
+    style: {
+      background: "rgba(220,38,38,0.25)",
+      border: "none",
+      color: "#fca5a5",
+      borderRadius: 8,
+      padding: "6px 12px",
+      cursor: "pointer",
+      fontSize: 12
+    }
+  }, "خروج"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px",
+      maxWidth: 1400,
+      margin: "0 auto"
+    }
+  }, tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
+    leads: visibleLeads,
+    renewals: can.renewals(currentUser) ? renewals : [],
+    user: currentUser,
+    period: period,
+    setPeriod: setPeriod,
+    targets: targets
+  }), tab === "leads" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 14,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      margin: 0,
+      fontSize: 17,
+      color: T.text
+    }
+  }, "العملاء المحتملون (", filteredLeads.length, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }), currentUser.role === "manager" && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const cols = ["id", "clientName", "phone", "phoneCountry", "email", "niche", "source", "storeUrl", "teleStage", "salesStage", "priority", "budget", "currency", "followUpDate", "createdAt"];
+      const head = ["ID", "الاسم", "الهاتف", "كود الدولة", "الإيميل", "النيتش", "المصدر", "رابط المتجر", "مرحلة الاستقطاب", "مرحلة المبيعات", "الأولوية", "الميزانية", "العملة", "تاريخ المتابعة", "تاريخ الإضافة"];
+      const rows = filteredLeads.map(l => cols.map(k => '"' + String(l[k] || "").replace(/"/g, '""') + '"').join(","));
+      const csv = "\uFEFF" + head.join(",") + "\n" + rows.join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], {
+        type: "text/csv;charset=utf-8"
+      }));
+      a.download = "falak-leads-" + today() + ".csv";
+      a.click();
+    },
+    style: {
+      ...btnGhost,
+      fontSize: 12
+    }
+  }, "⬇️ تصدير"), (currentUser.role === "manager" || can.allLeads(currentUser)) && /*#__PURE__*/React.createElement("label", {
+    title: "الأعمدة المدعومة: الاسم، الهاتف، الإيميل، النيتش، المصدر، رابط المتجر، الميزانية، ملاحظات",
+    style: {
+      ...btnGhost,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, importBusy ? "⏳ جارٍ الاستيراد..." : "📥 استيراد شيت (CSV)", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".csv",
+    style: {
+      display: "none"
+    },
+    onChange: e => {
+      const f = e.target.files[0];
+      e.target.value = "";
+      handleImportCSV(f);
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setEditLead(null);
       setShowLeadModal(true);
-      setTab("leads");
-    };
-    if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
-      onLogin: login
-    });
-    const visibleLeads = leads.filter(l => {
-      if (can.allLeads(currentUser)) return true;
-      if (currentUser.role === "outreach") return l.teleAgent === currentUser.id;
-      if (currentUser.role === "sales") return l.salesAgent === currentUser.id || l.teleStage === "meeting_booked";
-      return l.teleAgent === currentUser.id || l.salesAgent === currentUser.id;
-    });
-    const filteredLeads = visibleLeads.filter(l => {
-      const q = search.toLowerCase();
-      const mq = !q || (l.clientName || "").toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
-      return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage);
-    });
-    const leadAlerts = visibleLeads.flatMap(getLeadAlerts);
-    const renewalAlerts = (can.renewals(currentUser) ? renewals : []).map(getRenewalAlert).filter(Boolean);
-    const alertCount = leadAlerts.length + renewalAlerts.length;
-    const TABS = [{
-      id: "dashboard",
-      label: "📊 Dashboard",
-      show: true
-    }, {
-      id: "leads",
-      label: "👥 العملاء المحتملون",
-      show: true
-    }, {
-      id: "pipeline",
-      label: "🔄 مسار المبيعات",
-      show: true
-    }, {
-      id: "whatsapp",
-      label: waUnread > 0 ? `💬 واتساب (${waUnread})` : "💬 واتساب",
-      show: can.whatsapp(currentUser)
-    }, {
-      id: "renewals",
-      label: "🔁 التجديدات",
-      show: can.renewals(currentUser)
-    }, {
-      id: "finance",
-      label: "💼 الحسابات",
-      show: can.finance(currentUser)
-    }, {
-      id: "rules",
-      label: "⚙️ Rules",
-      show: can.rules(currentUser)
-    }].filter(t => t.show);
-    const filterSel = (val, setVal, opts, placeholder) => /*#__PURE__*/React.createElement("select", {
-      value: val,
-      onChange: e => setVal(e.target.value),
-      style: {
-        ...inputS,
-        width: "auto",
-        minWidth: 120,
-        padding: "8px 10px",
-        fontSize: 12
-      }
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, placeholder), opts.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o.value || o,
-      value: o.value || o
-    }, o.label || o)));
+    },
+    style: btnPrimary
+  }, "➕ إضافة عميل محتمل")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 14,
+      flexWrap: "wrap",
+      background: T.card,
+      padding: "12px 14px",
+      borderRadius: 12,
+      boxShadow: T.shadow
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: search,
+    onChange: e => setSearch(e.target.value),
+    placeholder: "🔍 بحث بالاسم أو الرقم...",
+    style: {
+      ...inputS,
+      width: "auto",
+      minWidth: 180,
+      padding: "8px 12px",
+      fontSize: 12
+    }
+  }), filterSel(fNiche, setFNiche, NICHES, "كل النيتشات"), filterSel(fSource, setFSource, SOURCES, "كل المصادر"), filterSel(fPriority, setFPriority, [{
+    value: "high",
+    label: "🔴 عالي"
+  }, {
+    value: "medium",
+    label: "🟡 متوسط"
+  }, {
+    value: "low",
+    label: "🟢 منخفض"
+  }], "كل الأولويات"), filterSel(fTeleStage, setFTeleStage, TELE_STAGES.map(s => ({
+    value: s.id,
+    label: s.label
+  })), "مراحل الاستقطاب"), filterSel(fSalesStage, setFSalesStage, SALES_STAGES.map(s => ({
+    value: s.id,
+    label: s.label
+  })), "مراحل المبيعات"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || search) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setSearch("");
+      setFNiche("");
+      setFSource("");
+      setFPriority("");
+      setFTeleStage("");
+      setFSalesStage("");
+    },
+    style: {
+      ...btnGhost,
+      padding: "7px 14px",
+      fontSize: 12,
+      color: T.danger
+    }
+  }, "✕ مسح الفلاتر")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.card,
+      borderRadius: 14,
+      overflow: "hidden",
+      boxShadow: T.shadow
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse"
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      background: "#f8fafc",
+      color: T.textSoft,
+      fontSize: 11
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "العميل"), can.allLeads(currentUser) && /*#__PURE__*/React.createElement("th", {
+    className: "hide-mobile",
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "التواصل"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "الاستقطاب"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "المبيعات"), /*#__PURE__*/React.createElement("th", {
+    className: "hide-mobile",
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "الأولوية"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right",
+      padding: "11px 14px"
+    }
+  }, "الموعد القادم"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: "11px 14px"
+    }
+  }))), /*#__PURE__*/React.createElement("tbody", null, filteredLeads.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: 7,
+    style: {
+      padding: 40,
+      textAlign: "center",
+      color: T.textMuted
+    }
+  }, loading ? "⏳ جارٍ التحميل..." : "لا يوجد عملاء مطابقون")), filteredLeads.map(l => /*#__PURE__*/React.createElement(LeadRow, {
+    key: l.id,
+    lead: l,
+    user: currentUser,
+    showFull: can.allLeads(currentUser),
+    onEdit: l => {
+      setEditLead(l);
+      setShowLeadModal(true);
+    },
+    onActivity: setActivityLead,
+    onQuickSend: can.whatsapp(currentUser) ? setQuickSendLead : null,
+    onViewDetail: setDetailLead,
+    onInlineStage: handleInlineStage
+  }))))))), tab === "pipeline" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      margin: "0 0 16px",
+      fontSize: 17
+    }
+  }, "🔄 مسار المبيعات"), [{
+    title: "📞 الاستقطاب",
+    stages: TELE_STAGES,
+    key: "teleStage"
+  }, {
+    title: "💼 المبيعات",
+    stages: SALES_STAGES,
+    key: "salesStage"
+  }].map(sec => /*#__PURE__*/React.createElement("div", {
+    key: sec.title
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: T.textSoft,
+      fontSize: 13,
+      margin: "14px 0 10px",
+      fontWeight: 700
+    }
+  }, sec.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      overflowX: "auto",
+      paddingBottom: 14
+    }
+  }, sec.stages.map(stage => {
+    const sl = visibleLeads.filter(l => l[sec.key] === stage.id);
     return /*#__PURE__*/React.createElement("div", {
+      key: stage.id,
       style: {
-        minHeight: "100vh",
-        background: T.bg,
-        color: T.text,
-        fontFamily: "'Segoe UI',Tahoma,Arial,sans-serif",
-        direction: "rtl"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: T.primary,
-        padding: "0 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        height: 58,
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        boxShadow: "0 2px 12px rgba(30,27,75,0.25)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        overflow: "hidden"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("img", {
-      src: window.FALAK_LOGO,
-      alt: "Falak",
-      style: {
-        height: 30,
-        filter: "brightness(0) invert(1)",
-        opacity: 0.95
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      className: "header-tabs",
-      style: {
-        display: "flex",
-        gap: 2
-      }
-    }, TABS.map(t => /*#__PURE__*/React.createElement("button", {
-      key: t.id,
-      onClick: () => setTab(t.id),
-      style: {
-        padding: "6px 13px",
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 12,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-        background: tab === t.id ? "rgba(255,255,255,0.18)" : "transparent",
-        color: tab === t.id ? "#fff" : "rgba(255,255,255,0.6)"
-      }
-    }, t.label)))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8
-      }
-    }, alertCount > 0 && /*#__PURE__*/React.createElement("button", {
-      onClick: () => setShowAlerts(true),
-      style: {
-        background: "#dc2626",
-        border: "none",
-        color: "#fff",
-        borderRadius: 20,
-        padding: "4px 12px",
-        fontSize: 12,
-        fontWeight: 800,
-        cursor: "pointer"
-      }
-    }, "🔔 ", alertCount), loading && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: "rgba(255,255,255,0.7)",
-        fontSize: 11
-      }
-    }, "⏳"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => loadAll(currentUser),
-      style: {
-        background: "rgba(255,255,255,0.12)",
-        border: "none",
-        color: "#fff",
-        borderRadius: 8,
-        padding: "6px 10px",
-        cursor: "pointer",
-        fontSize: 12
-      }
-    }, "🔄"), /*#__PURE__*/React.createElement("div", {
-      className: "hide-mobile",
-      style: {
-        textAlign: "left"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: "#fff",
-        fontSize: 12,
-        fontWeight: 700
-      }
-    }, currentUser.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: "rgba(255,255,255,0.5)",
-        fontSize: 10
-      }
-    }, ROLES[currentUser.role]?.label)), /*#__PURE__*/React.createElement("button", {
-      onClick: logout,
-      style: {
-        background: "rgba(220,38,38,0.25)",
-        border: "none",
-        color: "#fca5a5",
-        borderRadius: 8,
-        padding: "6px 12px",
-        cursor: "pointer",
-        fontSize: 12
-      }
-    }, "خروج"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        padding: "20px 16px",
-        maxWidth: 1400,
-        margin: "0 auto"
-      }
-    }, tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
-      leads: visibleLeads,
-      renewals: can.renewals(currentUser) ? renewals : [],
-      user: currentUser,
-      period: period,
-      setPeriod: setPeriod,
-      targets: targets
-    }), tab === "leads" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 10,
-        marginBottom: 14,
-        alignItems: "center",
-        flexWrap: "wrap"
-      }
-    }, /*#__PURE__*/React.createElement("h2", {
-      style: {
-        margin: 0,
-        fontSize: 17,
-        color: T.text
-      }
-    }, "العملاء المحتملون (", filteredLeads.length, ")"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }), currentUser.role === "manager" && /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        const cols = ["id", "clientName", "phone", "phoneCountry", "email", "niche", "source", "storeUrl", "teleStage", "salesStage", "priority", "budget", "currency", "followUpDate", "createdAt"];
-        const head = ["ID", "الاسم", "الهاتف", "كود الدولة", "الإيميل", "النيتش", "المصدر", "رابط المتجر", "مرحلة الاستقطاب", "مرحلة المبيعات", "الأولوية", "الميزانية", "العملة", "تاريخ المتابعة", "تاريخ الإضافة"];
-        const rows = filteredLeads.map(l => cols.map(k => '"' + String(l[k] || "").replace(/"/g, '""') + '"').join(","));
-        const csv = "\uFEFF" + head.join(",") + "\n" + rows.join("\n");
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([csv], {
-          type: "text/csv;charset=utf-8"
-        }));
-        a.download = "falak-leads-" + today() + ".csv";
-        a.click();
-      },
-      style: {
-        ...btnGhost,
-        fontSize: 12
-      }
-    }, "⬇️ تصدير"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setEditLead(null);
-        setShowLeadModal(true);
-      },
-      style: btnPrimary
-    }, "➕ إضافة عميل محتمل")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        marginBottom: 14,
-        flexWrap: "wrap",
+        minWidth: 175,
         background: T.card,
-        padding: "12px 14px",
         borderRadius: 12,
-        boxShadow: T.shadow
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      value: search,
-      onChange: e => setSearch(e.target.value),
-      placeholder: "🔍 بحث بالاسم أو الرقم...",
-      style: {
-        ...inputS,
-        width: "auto",
-        minWidth: 180,
-        padding: "8px 12px",
-        fontSize: 12
-      }
-    }), filterSel(fNiche, setFNiche, NICHES, "كل النيتشات"), filterSel(fSource, setFSource, SOURCES, "كل المصادر"), filterSel(fPriority, setFPriority, [{
-      value: "high",
-      label: "🔴 عالي"
-    }, {
-      value: "medium",
-      label: "🟡 متوسط"
-    }, {
-      value: "low",
-      label: "🟢 منخفض"
-    }], "كل الأولويات"), filterSel(fTeleStage, setFTeleStage, TELE_STAGES.map(s => ({
-      value: s.id,
-      label: s.label
-    })), "مراحل الاستقطاب"), filterSel(fSalesStage, setFSalesStage, SALES_STAGES.map(s => ({
-      value: s.id,
-      label: s.label
-    })), "مراحل الفريق المبيعات"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || search) && /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setSearch("");
-        setFNiche("");
-        setFSource("");
-        setFPriority("");
-        setFTeleStage("");
-        setFSalesStage("");
-      },
-      style: {
-        ...btnGhost,
-        padding: "7px 14px",
-        fontSize: 12,
-        color: T.danger
-      }
-    }, "✕ مسح الفلاتر")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: T.card,
-        borderRadius: 14,
-        overflow: "hidden",
+        padding: 12,
+        borderTop: `3px solid ${stage.color}`,
+        flexShrink: 0,
         boxShadow: T.shadow
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        overflowX: "auto"
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10
       }
-    }, /*#__PURE__*/React.createElement("table", {
+    }, /*#__PURE__*/React.createElement("span", {
       style: {
-        width: "100%",
-        borderCollapse: "collapse"
-      }
-    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
-      style: {
-        background: "#f8fafc",
-        color: T.textSoft,
-        fontSize: 11
-      }
-    }, /*#__PURE__*/React.createElement("th", {
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "العميل"), can.allLeads(currentUser) && /*#__PURE__*/React.createElement("th", {
-      className: "hide-mobile",
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "التواصل"), /*#__PURE__*/React.createElement("th", {
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "استقطاب"), /*#__PURE__*/React.createElement("th", {
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "فريق المبيعات"), /*#__PURE__*/React.createElement("th", {
-      className: "hide-mobile",
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "الأولوية"), /*#__PURE__*/React.createElement("th", {
-      style: {
-        textAlign: "right",
-        padding: "11px 14px"
-      }
-    }, "الموعد القادم"), /*#__PURE__*/React.createElement("th", {
-      style: {
-        padding: "11px 14px"
-      }
-    }))), /*#__PURE__*/React.createElement("tbody", null, filteredLeads.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
-      colSpan: 7,
-      style: {
-        padding: 40,
-        textAlign: "center",
-        color: T.textMuted
-      }
-    }, loading ? "⏳ جارٍ التحميل..." : "لا يوجد عميل محتملز مطابقة")), filteredLeads.map(l => /*#__PURE__*/React.createElement(LeadRow, {
-      key: l.id,
-      lead: l,
-      user: currentUser,
-      showFull: can.allLeads(currentUser),
-      onEdit: l => {
-        setEditLead(l);
-        setShowLeadModal(true);
-      },
-      onActivity: setActivityLead,
-      onQuickSend: can.whatsapp(currentUser) ? setQuickSendLead : null,
-      onViewDetail: setDetailLead,
-      onInlineStage: handleInlineStage
-    }))))))), tab === "pipeline" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-      style: {
-        margin: "0 0 16px",
-        fontSize: 17
-      }
-    }, "🔄 مسار المبيعات"), [{
-      title: "📞 الاستقطاب",
-      stages: TELE_STAGES,
-      key: "teleStage"
-    }, {
-      title: "💼 الفريق المبيعات",
-      stages: SALES_STAGES,
-      key: "salesStage"
-    }].map(sec => /*#__PURE__*/React.createElement("div", {
-      key: sec.title
-    }, /*#__PURE__*/React.createElement("p", {
-      style: {
-        color: T.textSoft,
-        fontSize: 13,
-        margin: "14px 0 10px",
+        color: stage.color,
+        fontSize: 12,
         fontWeight: 700
       }
-    }, sec.title), /*#__PURE__*/React.createElement("div", {
+    }, stage.icon, " ", stage.label), /*#__PURE__*/React.createElement("span", {
       style: {
-        display: "flex",
-        gap: 10,
-        overflowX: "auto",
-        paddingBottom: 14
+        background: stage.color + "15",
+        color: stage.color,
+        borderRadius: 10,
+        padding: "1px 8px",
+        fontSize: 11,
+        fontWeight: 700
       }
-    }, sec.stages.map(stage => {
-      const sl = visibleLeads.filter(l => l[sec.key] === stage.id);
+    }, sl.length)), sl.map(l => {
+      const urgent = getLeadAlerts(l).some(a => ["overdue", "today"].includes(a.level));
       return /*#__PURE__*/React.createElement("div", {
-        key: stage.id,
+        key: l.id,
+        onClick: () => {
+          setEditLead(l);
+          setShowLeadModal(true);
+        },
         style: {
-          minWidth: 175,
-          background: T.card,
-          borderRadius: 12,
-          padding: 12,
-          borderTop: `3px solid ${stage.color}`,
-          flexShrink: 0,
-          boxShadow: T.shadow
+          background: urgent ? "#fef2f2" : "#f8fafc",
+          borderRadius: 8,
+          padding: "9px 10px",
+          marginBottom: 7,
+          cursor: "pointer",
+          border: `1px solid ${urgent ? "#fecaca" : T.cardBorder}`
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 10
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          color: stage.color,
+          color: urgent ? T.danger : T.text,
           fontSize: 12,
           fontWeight: 700
         }
-      }, stage.icon, " ", stage.label), /*#__PURE__*/React.createElement("span", {
+      }, urgent && "🔴 ", can.allLeads(currentUser) ? l.clientName : `#${l.id}`), /*#__PURE__*/React.createElement("div", {
         style: {
-          background: stage.color + "15",
-          color: stage.color,
-          borderRadius: 10,
-          padding: "1px 8px",
-          fontSize: 11,
-          fontWeight: 700
+          color: T.textMuted,
+          fontSize: 10,
+          marginTop: 2
         }
-      }, sl.length)), sl.map(l => {
-        const urgent = getLeadAlerts(l).some(a => ["overdue", "today"].includes(a.level));
-        return /*#__PURE__*/React.createElement("div", {
-          key: l.id,
-          onClick: () => {
-            setEditLead(l);
-            setShowLeadModal(true);
-          },
-          style: {
-            background: urgent ? "#fef2f2" : "#f8fafc",
-            borderRadius: 8,
-            padding: "9px 10px",
-            marginBottom: 7,
-            cursor: "pointer",
-            border: `1px solid ${urgent ? "#fecaca" : T.cardBorder}`
-          }
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            color: urgent ? T.danger : T.text,
-            fontSize: 12,
-            fontWeight: 700
-          }
-        }, urgent && "🔴 ", can.allLeads(currentUser) ? l.clientName : `#${l.id}`), /*#__PURE__*/React.createElement("div", {
-          style: {
-            color: T.textMuted,
-            fontSize: 10,
-            marginTop: 2
-          }
-        }, l.niche));
-      }));
-    }))))), tab === "whatsapp" && can.whatsapp(currentUser) && /*#__PURE__*/React.createElement(WhatsAppTab, {
-      user: currentUser,
-      instances: instances,
-      funnel: funnel,
-      quickReplies: quickReplies,
-      leads: leads,
-      slaHours: slaHours,
-      onOpenLead: l => {
-        setEditLead(l);
-        setShowLeadModal(true);
-      },
-      onCreateLeadFromChat: createLeadFromChat
-    }), tab === "renewals" && can.renewals(currentUser) && /*#__PURE__*/React.createElement(RenewalsTab, {
-      renewals: renewals,
-      user: currentUser,
-      onEdit: r => {
-        setEditRenewal(r);
-        setShowRenewalModal(true);
-      },
-      onAdd: () => {
-        setEditRenewal(null);
-        setShowRenewalModal(true);
-      }
-    }), tab === "finance" && can.finance(currentUser) && /*#__PURE__*/React.createElement(FinanceTab, {
-      expenses: expenses,
-      collections: collections,
-      settings: settings,
-      onAddExpense: handleAddExpense,
-      onEditExpense: handleEditExpense,
-      onDeleteExpense: handleDeleteExpense,
-      onAddCollection: handleAddCollection,
-      onEditCollection: handleEditCollection,
-      onDeleteCollection: handleDeleteCollection,
-      onSaveSettings: handleSaveSettings,
-      period: period,
-      setPeriod: setPeriod
-    }), tab === "rules" && can.rules(currentUser) && /*#__PURE__*/React.createElement(RulesTab, {
-      users: usersList,
-      instances: instances,
-      funnel: funnel,
-      quickReplies: quickReplies,
-      autoCfg: autoCfg,
-      targets: targets,
-      onSaveUser: handleSaveUser,
-      onSaveInstances: handleSaveInstances,
-      onSaveFunnel: handleSaveFunnel,
-      onSaveQR: handleSaveQR,
-      onDeleteQR: handleDeleteQR,
-      onSaveAuto: handleSaveAuto
-    })), showLeadModal && /*#__PURE__*/React.createElement(LeadModal, {
-      lead: editLead,
-      user: currentUser,
-      allLeads: leads,
-      onSave: l => {
-        handleSaveLead(l);
-        if (l._fromChat) jsonpCall({
-          action: "linkChat",
-          chatId: l._fromChat,
-          leadId: l.id
-        }).catch(e => console.error(e));
-      },
-      onClose: () => {
-        setShowLeadModal(false);
-        setEditLead(null);
-      }
-    }), activityLead && /*#__PURE__*/React.createElement(ActivityModal, {
-      lead: activityLead,
-      user: currentUser,
-      onAddActivity: handleActivity,
-      onClose: () => setActivityLead(null)
-    }), showRenewalModal && /*#__PURE__*/React.createElement(RenewalModal, {
-      renewal: editRenewal,
-      user: currentUser,
-      onSave: handleSaveRenewal,
-      onClose: () => {
-        setShowRenewalModal(false);
-        setEditRenewal(null);
-      }
-    }), detailLead && /*#__PURE__*/React.createElement(LeadDetailDrawer, {
-      lead: detailLead,
-      user: currentUser,
-      instances: instances,
-      quickReplies: quickReplies,
-      onEdit: l => {
-        setEditLead(l);
-        setShowLeadModal(true);
-      },
-      onActivity: setActivityLead,
-      onQuickSend: can.whatsapp(currentUser) ? l => {
-        setQuickSendLead(l);
-        setDetailLead(null);
-      } : null,
-      onClose: () => setDetailLead(null)
-    }), quickSendLead && /*#__PURE__*/React.createElement(QuickSendModal, {
-      lead: quickSendLead,
-      user: currentUser,
-      instances: instances,
-      quickReplies: quickReplies,
-      onSent: summary => handleActivity(quickSendLead.id, {
-        date: today(),
-        agent: currentUser.name,
-        action: "📤 واتساب: " + summary.slice(0, 120)
-      }),
-      onClose: () => setQuickSendLead(null)
-    }), showAlerts && /*#__PURE__*/React.createElement(AlertsPopup, {
-      alerts: leadAlerts,
-      renewalAlerts: renewalAlerts,
-      onClose: () => setShowAlerts(false)
+      }, l.niche));
     }));
-  };
+  }))))), tab === "whatsapp" && can.whatsapp(currentUser) && /*#__PURE__*/React.createElement(WhatsAppTab, {
+    user: currentUser,
+    instances: instances,
+    funnel: funnel,
+    quickReplies: quickReplies,
+    leads: leads,
+    slaHours: slaHours,
+    onOpenLead: l => {
+      setEditLead(l);
+      setShowLeadModal(true);
+    },
+    onCreateLeadFromChat: createLeadFromChat
+  }), tab === "renewals" && can.renewals(currentUser) && /*#__PURE__*/React.createElement(RenewalsTab, {
+    renewals: renewals,
+    user: currentUser,
+    onEdit: r => {
+      setEditRenewal(r);
+      setShowRenewalModal(true);
+    },
+    onAdd: () => {
+      setEditRenewal(null);
+      setShowRenewalModal(true);
+    }
+  }), tab === "finance" && can.finance(currentUser) && /*#__PURE__*/React.createElement(FinanceTab, {
+    expenses: expenses,
+    collections: collections,
+    settings: settings,
+    onAddExpense: handleAddExpense,
+    onEditExpense: handleEditExpense,
+    onDeleteExpense: handleDeleteExpense,
+    onAddCollection: handleAddCollection,
+    onEditCollection: handleEditCollection,
+    onDeleteCollection: handleDeleteCollection,
+    onSaveSettings: handleSaveSettings,
+    period: period,
+    setPeriod: setPeriod
+  }), tab === "rules" && can.rules(currentUser) && /*#__PURE__*/React.createElement(RulesTab, {
+    users: usersList,
+    instances: instances,
+    funnel: funnel,
+    quickReplies: quickReplies,
+    autoCfg: autoCfg,
+    targets: targets,
+    onSaveUser: handleSaveUser,
+    onSaveInstances: handleSaveInstances,
+    onSaveFunnel: handleSaveFunnel,
+    onSaveQR: handleSaveQR,
+    onDeleteQR: handleDeleteQR,
+    onSaveAuto: handleSaveAuto
+  })), showLeadModal && /*#__PURE__*/React.createElement(LeadModal, {
+    lead: editLead,
+    user: currentUser,
+    allLeads: leads,
+    onSave: l => {
+      handleSaveLead(l);
+      if (l._fromChat) jsonpCall({
+        action: "linkChat",
+        chatId: l._fromChat,
+        leadId: l.id
+      }).catch(e => console.error(e));
+    },
+    onClose: () => {
+      setShowLeadModal(false);
+      setEditLead(null);
+    }
+  }), activityLead && /*#__PURE__*/React.createElement(ActivityModal, {
+    lead: activityLead,
+    user: currentUser,
+    onAddActivity: handleActivity,
+    onClose: () => setActivityLead(null)
+  }), showRenewalModal && /*#__PURE__*/React.createElement(RenewalModal, {
+    renewal: editRenewal,
+    user: currentUser,
+    onSave: handleSaveRenewal,
+    onClose: () => {
+      setShowRenewalModal(false);
+      setEditRenewal(null);
+    }
+  }), detailLead && /*#__PURE__*/React.createElement(LeadDetailDrawer, {
+    lead: detailLead,
+    user: currentUser,
+    instances: instances,
+    quickReplies: quickReplies,
+    onEdit: l => {
+      setEditLead(l);
+      setShowLeadModal(true);
+    },
+    onActivity: setActivityLead,
+    onQuickSend: can.whatsapp(currentUser) ? l => {
+      setQuickSendLead(l);
+      setDetailLead(null);
+    } : null,
+    onClose: () => setDetailLead(null)
+  }), quickSendLead && /*#__PURE__*/React.createElement(QuickSendModal, {
+    lead: quickSendLead,
+    user: currentUser,
+    instances: instances,
+    quickReplies: quickReplies,
+    onSent: summary => handleActivity(quickSendLead.id, {
+      date: today(),
+      agent: currentUser.name,
+      action: "📤 واتساب: " + summary.slice(0, 120)
+    }),
+    onClose: () => setQuickSendLead(null)
+  }), showAlerts && /*#__PURE__*/React.createElement(AlertsPopup, {
+    alerts: leadAlerts,
+    renewalAlerts: renewalAlerts,
+    onClose: () => setShowAlerts(false)
+  }));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 
 </script>
-
 </body>
 </html>
