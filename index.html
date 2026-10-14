@@ -190,8 +190,23 @@ const SALES_STAGES = [{
   color: "#dc2626",
   icon: "💔"
 }];
-const NICHES = ["صيدليات / صحة", "ملابس", "إلكترونيات", "مطاعم / أكل", "عيادات / طب", "مستحضرات تجميل", "أم وطفل", "رياضة", "أثاث / ديكور", "تعليم", "عقارات", "أخرى"];
-const SOURCES = ["سكرابر سلة", "إحالة", "سوشيال ميديا", "جوجل", "معرض", "لينكدإن", "واتساب", "أخرى"];
+let NICHES = ["صيدليات / صحة", "ملابس", "إلكترونيات", "مطاعم / أكل", "عيادات / طب", "مستحضرات تجميل", "أم وطفل", "رياضة", "أثاث / ديكور", "تعليم", "عقارات", "أخرى"];
+const COUNTRY_NAMES = {
+  SA: "🇸🇦 السعودية",
+  AE: "🇦🇪 الإمارات",
+  OM: "🇴🇲 عُمان",
+  KW: "🇰🇼 الكويت",
+  BH: "🇧🇭 البحرين",
+  QA: "🇶🇦 قطر",
+  EG: "🇪🇬 مصر",
+  JO: "🇯🇴 الأردن"
+};
+const growList = (list, values) => {
+  values.forEach(v => {
+    if (v && !list.includes(v)) list.push(v);
+  });
+};
+let SOURCES = ["سكرابر سلة", "إحالة", "سوشيال ميديا", "جوجل", "معرض", "لينكدإن", "واتساب", "أخرى"];
 const POSITIONS_DM = ["المالك", "المدير العام", "مدير التسويق", "مدير المبيعات", "مدير العمليات", "شريك", "أخرى"];
 const PRIORITY_COLOR = {
   high: "#dc2626",
@@ -265,13 +280,13 @@ const normPhone = p => String(p || "").replace(/\D/g, "").replace(/^0+/, "");
 const waLink = (phone, country) => {
   const p = normPhone(phone);
   if (!p) return null;
-  const code = country === "+20" ? "20" : "966";
+  const code = String(country || "+966").replace(/\D/g, "") || "966";
   return "https://wa.me/" + code + p;
 };
 const toChatId = (phone, country) => {
   const p = normPhone(phone);
   if (!p) return null;
-  const code = country === "+20" ? "20" : "966";
+  const code = String(country || "+966").replace(/\D/g, "") || "966";
   return code + p + "@c.us";
 };
 const chatIdToPhone = cid => String(cid || "").replace("@c.us", "").replace("@s.whatsapp.net", "");
@@ -315,18 +330,15 @@ function getPeriodItems(items, period, dateKey) {
     return true;
   });
 }
-function jsonpOnce(params) {
+function jsonpCall(params) {
   return new Promise((resolve, reject) => {
     const cbName = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
     const script = document.createElement("script");
     const timeout = setTimeout(() => {
-      // الرد المتأخر لا يسبب خطأ
-      window[cbName] = () => {
-        delete window[cbName];
-      };
+      delete window[cbName];
       if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error("timeout"));
-    }, 60000);
+    }, 25000);
     window[cbName] = data => {
       clearTimeout(timeout);
       delete window[cbName];
@@ -345,61 +357,6 @@ function jsonpOnce(params) {
     document.head.appendChild(script);
   });
 }
-// إعادة المحاولة مرة واحدة للتحميل والحفظ
-const RETRY_ACTIONS = ["getAll", "saveLead"];
-function jsonpCall(params) {
-  const p = jsonpOnce(params);
-  if (!params || !RETRY_ACTIONS.includes(params.action)) return p;
-  return p.catch(() => new Promise(r => setTimeout(r, 1500)).then(() => jsonpOnce(params)));
-}
-// طابور حفظ لكل عميل: طلب يخلص قبل ما التالي يبدأ
-const LEAD_Q = {};
-function queueLeadSave(lead) {
-  const id = lead.id;
-  const q = LEAD_Q[id] || (LEAD_Q[id] = {
-    chain: Promise.resolve(),
-    latest: null,
-    n: 0
-  });
-  q.latest = lead;
-  q.n++;
-  const run = () => jsonpCall({
-    action: "saveLead",
-    lead: JSON.stringify(lead)
-  }).then(r => {
-    if (!r || !r.success) throw new Error(r && r.error || "save failed");
-    return r;
-  });
-  const p = q.chain.then(run, run);
-  q.chain = p.catch(() => {});
-  const done = () => {
-    q.n--;
-    if (q.n === 0 && LEAD_Q[id] === q) delete LEAD_Q[id];
-  };
-  p.then(done, done);
-  return p;
-}
-function pendingLead(id) {
-  return LEAD_Q[id] ? LEAD_Q[id].latest : null;
-}
-// التغييرات اللي لسه بتتحفظ لا يكتب فوقها تحميل قديم
-function mergePendingLeads(list) {
-  const ids = new Set(list.map(l => l.id));
-  const merged = list.map(l => pendingLead(l.id) || l);
-  const extra = Object.keys(LEAD_Q).map(k => LEAD_Q[k].latest).filter(l => l && !ids.has(l.id));
-  return [...extra, ...merged];
-}
-function patchLeadCache(userId, lead) {
-  try {
-    const k = "maawan_cache_" + userId;
-    const c = JSON.parse(localStorage.getItem(k) || "null");
-    if (!c || !Array.isArray(c.leads)) return;
-    const i = c.leads.findIndex(l => l.id === lead.id);
-    if (i >= 0) c.leads[i] = lead;else c.leads.unshift(lead);
-    localStorage.setItem(k, JSON.stringify(c));
-  } catch (e) {}
-}
-const SAVE_FAIL_MSG = name => "⚠️ لم يتم حفظ التعديل" + (name ? " (" + name + ")" : "") + " — تحقق من الاتصال وحاول مرة أخرى";
 
 // تنبيهات المواعيد
 function getLeadAlerts(lead) {
@@ -692,7 +649,7 @@ function PhoneInput({
     onChange: e => onCountry(e.target.value),
     style: {
       ...inputS,
-      width: 90,
+      width: 104,
       flexShrink: 0,
       direction: "ltr",
       textAlign: "center"
@@ -700,6 +657,18 @@ function PhoneInput({
   }, /*#__PURE__*/React.createElement("option", {
     value: "+966"
   }, "🇸🇦 +966"), /*#__PURE__*/React.createElement("option", {
+    value: "+971"
+  }, "🇦🇪 +971"), /*#__PURE__*/React.createElement("option", {
+    value: "+968"
+  }, "🇴🇲 +968"), /*#__PURE__*/React.createElement("option", {
+    value: "+965"
+  }, "🇰🇼 +965"), /*#__PURE__*/React.createElement("option", {
+    value: "+973"
+  }, "🇧🇭 +973"), /*#__PURE__*/React.createElement("option", {
+    value: "+974"
+  }, "🇶🇦 +974"), /*#__PURE__*/React.createElement("option", {
+    value: "+962"
+  }, "🇯🇴 +962"), /*#__PURE__*/React.createElement("option", {
     value: "+20"
   }, "🇪🇬 +20")), /*#__PURE__*/React.createElement("input", {
     value: phone || "",
@@ -5318,7 +5287,13 @@ function LeadDetailDrawer({
     label: "النيتش"
   }, lead.niche || "—"), /*#__PURE__*/React.createElement(Row, {
     label: "المصدر"
-  }, lead.source || "—"), /*#__PURE__*/React.createElement(Row, {
+  }, lead.source || "—"), lead.country && /*#__PURE__*/React.createElement(Row, {
+    label: "الدولة"
+  }, COUNTRY_NAMES[lead.country] || lead.country), lead.platform && /*#__PURE__*/React.createElement(Row, {
+    label: "المنصة"
+  }, lead.platform), lead.tier && /*#__PURE__*/React.createElement(Row, {
+    label: "الفئة"
+  }, "Tier ", lead.tier), /*#__PURE__*/React.createElement(Row, {
     label: "الميزانية"
   }, lead.budget ? `${fmt(lead.budget)} ${lead.currency}` : "—")), lead.dmName && /*#__PURE__*/React.createElement(Section, {
     title: "👤 متخذ القرار"
@@ -5853,7 +5828,6 @@ function App() {
   const [targets, setTargets] = useState({});
   const [autoCfg, setAutoCfg] = useState({});
   const [loading, setLoading] = useState(false);
-  const [stale, setStale] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [fNiche, setFNiche] = useState("");
@@ -5861,6 +5835,11 @@ function App() {
   const [fPriority, setFPriority] = useState("");
   const [fTeleStage, setFTeleStage] = useState("");
   const [fSalesStage, setFSalesStage] = useState("");
+  const [fCountry, setFCountry] = useState("");
+  const [pageSize, setPageSize] = useState(100);
+  useEffect(() => {
+    setPageSize(100);
+  }, [search, fNiche, fSource, fPriority, fTeleStage, fSalesStage, fCountry]);
   const [editLead, setEditLead] = useState(null);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [activityLead, setActivityLead] = useState(null);
@@ -5881,11 +5860,8 @@ function App() {
         userId: user.id,
         role: user.role
       });
-      if (!data || !data.success) throw new Error(data && data.error || "getAll failed");
       if (data.success) {
-        data.leads = mergePendingLeads(data.leads || []);
-        setStale(false);
-        setLeads(data.leads);
+        setLeads(data.leads || []);
         setRenewals(data.renewals || []);
         if (data.users) {
           setUsersList(data.users);
@@ -5912,9 +5888,8 @@ function App() {
       console.error("loadAll:", e);
       try {
         const c = JSON.parse(localStorage.getItem("maawan_cache_" + user.id) || "null");
-        setStale(true);
         if (c) {
-          setLeads(mergePendingLeads(c.leads || []));
+          setLeads(c.leads || []);
           setRenewals(c.renewals || []);
           setExpenses(c.expenses || []);
           setCollections(c.collections || []);
@@ -5984,11 +5959,7 @@ function App() {
     });
     setShowLeadModal(false);
     setEditLead(null);
-    patchLeadCache(currentUser.id, updated);
-    queueLeadSave(updated).then(() => setTimeout(() => loadAll(currentUser), 2000)).catch(e => {
-      console.error("saveLead", e);
-      alert(SAVE_FAIL_MSG(updated.clientName));
-    });
+    saveGeneric("saveLead", "lead", updated);
   };
   const handleActivity = (leadId, entry) => {
     setLeads(prev => prev.map(l => l.id === leadId ? {
@@ -6146,18 +6117,17 @@ function App() {
   };
   const handleInlineStage = async (lead, field, value) => {
     const updated = {
-      ...(pendingLead(lead.id) || lead),
+      ...lead,
       [field]: value || null,
       updatedAt: today()
     };
     setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-    patchLeadCache(currentUser.id, updated);
     try {
-      await queueLeadSave(updated);
-    } catch (e) {
-      console.error("saveLead", e);
-      alert(SAVE_FAIL_MSG(updated.clientName));
-    }
+      await jsonpCall({
+        action: "saveLead",
+        lead: JSON.stringify(updated)
+      });
+    } catch (e) {}
   };
   const handleImportCSV = async file => {
     if (!file) return;
@@ -6308,6 +6278,8 @@ function App() {
   if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
     onLogin: login
   });
+  growList(NICHES, leads.map(l => l.niche));
+  growList(SOURCES, leads.map(l => l.source));
   const visibleLeads = leads.filter(l => {
     if (can.allLeads(currentUser)) return true;
     if (currentUser.role === "outreach") return l.teleAgent === currentUser.id;
@@ -6317,7 +6289,7 @@ function App() {
   const filteredLeads = visibleLeads.filter(l => {
     const q = search.toLowerCase();
     const mq = !q || (l.clientName || "").toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
-    return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage);
+    return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage) && (!fCountry || (l.country || "SA") === fCountry);
   });
   const leadAlerts = visibleLeads.flatMap(getLeadAlerts);
   const renewalAlerts = (can.renewals(currentUser) ? renewals : []).map(getRenewalAlert).filter(Boolean);
@@ -6452,17 +6424,7 @@ function App() {
       color: "rgba(255,255,255,0.7)",
       fontSize: 11
     }
-  }, "⏳"), stale && !loading && /*#__PURE__*/React.createElement("span", {
-    title: "تعذّر التحميل من السيرفر — المعروض نسخة محفوظة على الجهاز",
-    style: {
-      background: "#f59e0b",
-      color: "#1f2937",
-      borderRadius: 20,
-      padding: "4px 10px",
-      fontSize: 11,
-      fontWeight: 800
-    }
-  }, "⚠️ بيانات قديمة — اضغط تحديث"), /*#__PURE__*/React.createElement("button", {
+  }, "⏳"), /*#__PURE__*/React.createElement("button", {
     onClick: () => loadAll(currentUser),
     style: {
       background: "rgba(255,255,255,0.12)",
@@ -6609,7 +6571,10 @@ function App() {
   })), "مراحل الاستقطاب"), filterSel(fSalesStage, setFSalesStage, SALES_STAGES.map(s => ({
     value: s.id,
     label: s.label
-  })), "مراحل المبيعات"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || search) && /*#__PURE__*/React.createElement("button", {
+  })), "مراحل المبيعات"), filterSel(fCountry, setFCountry, Object.keys(COUNTRY_NAMES).map(k => ({
+    value: k,
+    label: COUNTRY_NAMES[k]
+  })), "كل الدول"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || fCountry || search) && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setSearch("");
       setFNiche("");
@@ -6617,6 +6582,7 @@ function App() {
       setFPriority("");
       setFTeleStage("");
       setFSalesStage("");
+      setFCountry("");
     },
     style: {
       ...btnGhost,
@@ -6689,7 +6655,7 @@ function App() {
       textAlign: "center",
       color: T.textMuted
     }
-  }, loading ? "⏳ جارٍ التحميل..." : "لا يوجد عملاء مطابقون")), filteredLeads.map(l => /*#__PURE__*/React.createElement(LeadRow, {
+  }, loading ? "⏳ جارٍ التحميل..." : "لا يوجد عملاء مطابقون")), filteredLeads.slice(0, pageSize).map(l => /*#__PURE__*/React.createElement(LeadRow, {
     key: l.id,
     lead: l,
     user: currentUser,
@@ -6702,7 +6668,25 @@ function App() {
     onQuickSend: can.whatsapp(currentUser) ? setQuickSendLead : null,
     onViewDetail: setDetailLead,
     onInlineStage: handleInlineStage
-  }))))))), tab === "pipeline" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+  }))))), filteredLeads.length > pageSize && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px",
+      textAlign: "center",
+      borderTop: `1px solid ${T.cardBorder}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: T.textSoft,
+      fontSize: 12,
+      marginLeft: 10
+    }
+  }, "معروض ", pageSize, " من ", filteredLeads.length), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPageSize(p => p + 100),
+    style: {
+      ...btnGhost,
+      fontSize: 12
+    }
+  }, "عرض 100 كمان")))), tab === "pipeline" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
     style: {
       margin: "0 0 16px",
       fontSize: 17
@@ -6766,7 +6750,7 @@ function App() {
         fontSize: 11,
         fontWeight: 700
       }
-    }, sl.length)), sl.map(l => {
+    }, sl.length)), sl.slice(0, 40).map(l => {
       const urgent = getLeadAlerts(l).some(a => ["overdue", "today"].includes(a.level));
       return /*#__PURE__*/React.createElement("div", {
         key: l.id,
@@ -6795,7 +6779,14 @@ function App() {
           marginTop: 2
         }
       }, l.niche));
-    }));
+    }), sl.length > 40 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: T.textMuted,
+        fontSize: 11,
+        textAlign: "center",
+        padding: 4
+      }
+    }, "+ ", sl.length - 40, " عميل آخر — استخدم الفلاتر في تاب العملاء"));
   }))))), tab === "whatsapp" && can.whatsapp(currentUser) && /*#__PURE__*/React.createElement(WhatsAppTab, {
     user: currentUser,
     instances: instances,
