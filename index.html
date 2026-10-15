@@ -102,18 +102,9 @@ const {
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3AC-GclAUEUBZ2KF979nWBmSLKizR826gRWtdv0u8qFWjW2WRH8lNNW6f9Te-GJxD/exec";
 
 // حساب طوارئ لو السيرفر وقع (المدير فقط)
-const FALLBACK_MANAGER = {
-  id: "mgr1",
-  username: "mohamed",
-  password: "Maawan@2025",
-  role: "manager",
-  name: "محمد",
-  instances: [],
-  perms: {}
-};
 
 // USERS بتتحمل من الشيت بعد الدخول — دي قائمة عرض مؤقتة
-let USERS = [FALLBACK_MANAGER];
+let USERS = [];
 const ROLES = {
   manager: {
     label: "المدير العام"
@@ -808,15 +799,13 @@ function LoginScreen({
     try {
       const res = await jsonpCall({
         action: "login",
-        username: u,
-        password: p
+        username: u.trim(),
+        password: p.trim()
       });
-      if (res.success && res.user) user = res.user;else if (res.error) setErr(res.error);
+      if (res.success && res.user) user = res.user;else setErr(res.error || "اسم المستخدم أو كلمة المرور غلط");
     } catch (e) {
-      // فولباك طوارئ: حساب المدير المدمج
-      if (u === FALLBACK_MANAGER.username && p === FALLBACK_MANAGER.password) user = FALLBACK_MANAGER;else setErr("مشكلة في الاتصال بالسيرفر — جرب تاني");
+      setErr("مشكلة في الاتصال بالسيرفر — جرب تاني");
     }
-    if (!user && !err) setErr("اسم المستخدم أو كلمة المرور غلط");
     if (user) {
       if (remember) {
         try {
@@ -890,10 +879,16 @@ function LoginScreen({
     value: u,
     onChange: e => setU(e.target.value),
     placeholder: "اسم المستخدم",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "username",
+    spellCheck: false,
     style: {
       ...inputS,
       marginBottom: 10,
-      padding: "12px 14px"
+      padding: "12px 14px",
+      direction: "ltr",
+      textAlign: "right"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -904,6 +899,10 @@ function LoginScreen({
     value: p,
     onChange: e => setP(e.target.value),
     type: showPw ? "text" : "password",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "current-password",
+    spellCheck: false,
     placeholder: "كلمة المرور",
     onKeyDown: e => e.key === "Enter" && handle(),
     style: {
