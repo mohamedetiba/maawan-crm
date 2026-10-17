@@ -610,6 +610,7 @@ const Outbox = {
         } : {
           action: "patchLead",
           id: op.id,
+          name: op.name || "",
           changes: JSON.stringify(op.changes),
           base: JSON.stringify(op.base || {})
         };
@@ -617,6 +618,7 @@ const Outbox = {
         return {
           action: "addActivity",
           leadId: op.leadId,
+          name: op.name || "",
           entry: JSON.stringify(op.entry),
           userId: SESSION.uid
         };
@@ -1380,7 +1382,8 @@ function LeadModal({
       setDupWarn("⚠️ اسم العميل والرقم مطلوبين");
       return;
     }
-    const dup = checkDuplicate();
+    const changedKey = isNew || normPhone(form.phone) !== normPhone(lead.phone) || (form.clientName || "").trim().toLowerCase() !== (lead.clientName || "").trim().toLowerCase();
+    const dup = changedKey ? checkDuplicate() : null;
     if (dup) {
       setDupWarn(`🚫 لا يمكن الحفظ — ${dup.kind} مكرر ومسجّل مسبقاً للعميل "${dup.lead.clientName}" (رقم ${dup.lead.id})`);
       return;
@@ -1531,7 +1534,18 @@ function LeadModal({
     label: u.name
   }))]))), /*#__PURE__*/React.createElement("div", {
     style: secStyle(T.surface2, "rgba(255,255,255,0.16)")
-  }, secTitle(T.textSoft, "📎 مرفقات (روابط جوجل درايف)"), inp("رابط العقد", "contractUrl", "url", "https://drive.google.com/..."), ta("روابط التقارير (رابط في كل سطر)", "reportUrls", 2)), /*#__PURE__*/React.createElement("div", {
+  }, secTitle(T.textSoft, "📎 مرفقات (روابط جوجل درايف)"), inp("رابط العقد", "contractUrl", "url", "https://drive.google.com/..."), ta("روابط التقارير (رابط في كل سطر)", "reportUrls", 2)), dupWarn && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.dangerBg,
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: 10,
+      padding: "10px 14px",
+      color: T.danger,
+      fontSize: 13,
+      fontWeight: 700,
+      marginBottom: 10
+    }
+  }, dupWarn), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -1818,7 +1832,18 @@ function RenewalModal({
       fontWeight: 700,
       marginBottom: 10
     }
-  }, "💰 عند الحفظ هيتسجل تحصيل تلقائي بقيمة ", fmt(form.contractValue), " ", form.currency, " في الحسابات"), /*#__PURE__*/React.createElement("div", {
+  }, "💰 عند الحفظ هيتسجل تحصيل تلقائي بقيمة ", fmt(form.contractValue), " ", form.currency, " في الحسابات"), dupWarn && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.dangerBg,
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: 10,
+      padding: "10px 14px",
+      color: T.danger,
+      fontSize: 13,
+      fontWeight: 700,
+      marginBottom: 10
+    }
+  }, dupWarn), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -4667,7 +4692,7 @@ function App() {
     Object.keys(metaRef.current).forEach(k => {
       if (k[0] !== "_") meta[k] = metaRef.current[k];
     });
-    IDB.set("data_" + u.id, {
+    IDB.set("data2_" + u.id, {
       leads: leadsRef.current,
       meta,
       since: syncRef.current.since,
@@ -4710,7 +4735,7 @@ function App() {
     loadingRef.current = true;
     setLoading(true);
     setSyncErr("");
-    const cacheKey = "data_" + user.id;
+    const cacheKey = "data2_" + user.id;
     // ١) نفتح فوراً من النسخة المحفوظة على الجهاز
     if (!opts.skipCache) {
       const c = await IDB.get(cacheKey);
@@ -4795,7 +4820,10 @@ function App() {
     if (!reason && SESSION.v8) api({
       action: "logout"
     }).catch(() => {});
-    if (!reason && u) IDB.del("data_" + u.id);
+    if (!reason && u) {
+      IDB.del("data_" + u.id);
+      IDB.del("data2_" + u.id);
+    }
     try {
       localStorage.removeItem("maawan_user");
     } catch (e) {}
@@ -4919,6 +4947,7 @@ function App() {
     Outbox.push({
       action: "patchLead",
       id: original.id,
+      name: original.clientName || "",
       changes,
       base,
       legacyLead: merged
@@ -4930,6 +4959,7 @@ function App() {
     commitLead(updated, original);
   };
   const handleActivity = (leadId, entry) => {
+    const ld = leadsRef.current.find(l => l.id === leadId);
     setLeads(prev => prev.map(l => l.id === leadId ? {
       ...l,
       activityLog: [...(l.activityLog || []), entry],
@@ -4938,6 +4968,7 @@ function App() {
     Outbox.push({
       action: "addActivity",
       leadId,
+      name: ld ? ld.clientName || "" : "",
       entry
     });
   };
