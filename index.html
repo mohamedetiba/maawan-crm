@@ -414,6 +414,49 @@ async function api(params, timeoutMs) {
   if (res && res.authError && SESSION.onAuthError) SESSION.onAuthError(res.error);
   return res;
 }
+// الكتابة بتتبعت POST (مفيش حد لطول الملاحظات)، ولو المتصفح منعها نرجع للطريقة القديمة لو الحجم صغير
+async function apiPost(params, timeoutMs = 45000) {
+  const payload = {
+    ...params,
+    token: SESSION.token,
+    userId: SESSION.uid,
+    role: SESSION.role
+  };
+  const body = JSON.stringify(payload);
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = setTimeout(() => ctrl && ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    const r = await fetch(SCRIPT_URL, {
+      method: "POST",
+      body,
+      redirect: "follow",
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    res = JSON.parse(await r.text());
+  } catch (e) {
+    clearTimeout(timer);
+    if (encodeURIComponent(body).length < 6000) return api(params, timeoutMs);
+    throw e;
+  }
+  clearTimeout(timer);
+  if (res && res.authError && SESSION.onAuthError) SESSION.onAuthError(res.error);
+  return res;
+}
+// بصمة النص — لازم تطابق textHash في Apps Script
+function textHash(v) {
+  const t = String(v == null ? "" : v).trim();
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = (h << 5) + h + t.charCodeAt(i) | 0;
+  return "#h:" + (h >>> 0).toString(36) + ":" + t.length;
+}
+const TEXT_FIELDS_C = {
+  notes: 1,
+  storeNeeds: 1,
+  storeAnalysis: 1,
+  solutionPlan: 1,
+  reportUrls: 1
+};
 const newId = (p = "L") => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // ══════════ تخزين محلي (IndexedDB) — فتح فوري للسستم من غير ما نستنى السيرفر ══════════
@@ -594,7 +637,7 @@ const Outbox = {
         op.sending = true;
         let res;
         try {
-          res = await api({
+          res = await apiPost({
             ...this.toParams(op),
             opId: op.opId
           }, 45000);
@@ -2020,9 +2063,17 @@ function FinanceTab({
   const [editCol, setEditCol] = useState(null);
   const [officeP, setOfficeP] = useState(settings.officePercent ?? 10);
   const [taxP, setTaxP] = useState(settings.taxPercent ?? 14);
+  const lastSet = useRef(null);
   useEffect(() => {
-    setOfficeP(settings.officePercent ?? 10);
-    setTaxP(settings.taxPercent ?? 14);
+    const o = settings.officePercent ?? 10,
+      t = settings.taxPercent ?? 14;
+    const prev = lastSet.current;
+    setOfficeP(cur => !prev || String(cur) === String(prev.o) ? o : cur);
+    setTaxP(cur => !prev || String(cur) === String(prev.t) ? t : cur);
+    lastSet.current = {
+      o,
+      t
+    };
   }, [settings]);
   const pCollections = getPeriodItems(collections, period, "date");
   const pExpenses = expenses.filter(e => {
@@ -3018,6 +3069,9 @@ function LeadRow({
     }
   }, "✏️"))));
 }
+const DashboardMemo = React.memo(function DashboardInner(props) {
+  return Dashboard(props);
+});
 function Dashboard({
   leads,
   renewals,
@@ -3674,15 +3728,22 @@ function RulesTab({
     amount: "",
     currency: "SAR"
   });
+  // لو المدير بيكتب في الفورم، التحديثات اللي جاية من السيرفر ماتمسحش كلامه
+  const lastRec = useRef(null),
+    lastTgt = useRef(null);
   useEffect(() => {
     setAuto(a => ({
       ...a,
       ...(autoCfg || {})
     }));
-    setRecExp(autoCfg && autoCfg.recurringExpenses || []);
+    const js = JSON.stringify(autoCfg && autoCfg.recurringExpenses || []);
+    setRecExp(cur => lastRec.current === null || JSON.stringify(cur) === lastRec.current ? JSON.parse(js) : cur);
+    lastRec.current = js;
   }, [autoCfg]);
   useEffect(() => {
-    setTgt(JSON.parse(JSON.stringify(targets || {})));
+    const js = JSON.stringify(targets || {});
+    setTgt(cur => lastTgt.current === null || JSON.stringify(cur) === lastTgt.current ? JSON.parse(js) : cur);
+    lastTgt.current = js;
   }, [targets]);
   const getU = u => edits[u.id] ? edits[u.id] : u;
   const setU = (id, patch) => setEdits(prev => ({
@@ -4531,6 +4592,7 @@ function App() {
   const [toastMsg, setToastMsg] = useState("");
   const [tab, setTab] = useState("dashboard");
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [fNiche, setFNiche] = useState("");
   const [fSource, setFSource] = useState("");
   const [fPriority, setFPriority] = useState("");
@@ -4577,45 +4639,37 @@ function App() {
   };
   const applyMeta = (data, user) => {
     const m = metaRef.current;
-    if (data.renewals) {
-      setRenewals(data.renewals);
-      m.renewals = data.renewals;
-    }
-    if (data.users) {
+    const same = (k, v) => {
+      const js = JSON.stringify(v);
+      if (m["_" + k] === js) return true;
+      m["_" + k] = js;
+      m[k] = v;
+      return false;
+    };
+    if (data.renewals && !same("renewals", data.renewals)) setRenewals(data.renewals);
+    if (data.users && !same("users", data.users)) {
       setUsersList(data.users);
       USERS.length = 0;
       data.users.forEach(u => USERS.push(u));
-      m.users = data.users;
     }
-    if (data.targets) {
-      setTargets(data.targets);
-      m.targets = data.targets;
-    }
-    if (data.autoCfg) {
-      setAutoCfg(data.autoCfg);
-      m.autoCfg = data.autoCfg;
-    }
+    if (data.targets && !same("targets", data.targets)) setTargets(data.targets);
+    if (data.autoCfg && !same("autoCfg", data.autoCfg)) setAutoCfg(data.autoCfg);
     if (can.finance(user)) {
-      if (data.expenses) {
-        setExpenses(data.expenses);
-        m.expenses = data.expenses;
-      }
-      if (data.collections) {
-        setCollections(data.collections);
-        m.collections = data.collections;
-      }
-      if (data.settings) {
-        setSettings(data.settings);
-        m.settings = data.settings;
-      }
+      if (data.expenses && !same("expenses", data.expenses)) setExpenses(data.expenses);
+      if (data.collections && !same("collections", data.collections)) setCollections(data.collections);
+      if (data.settings && !same("settings", data.settings)) setSettings(data.settings);
     }
   };
   const saveCache = useCallback(() => {
     const u = userRef.current;
     if (!u || !syncRef.current.fullLoaded) return;
+    const meta = {};
+    Object.keys(metaRef.current).forEach(k => {
+      if (k[0] !== "_") meta[k] = metaRef.current[k];
+    });
     IDB.set("data_" + u.id, {
       leads: leadsRef.current,
-      meta: metaRef.current,
+      meta,
       since: syncRef.current.since,
       savedAt: Date.now(),
       v8: !!u.v8
@@ -4778,6 +4832,11 @@ function App() {
     }
   };
   useEffect(() => {
+    try {
+      Object.keys(localStorage).filter(k => k.indexOf("maawan_cache_") === 0).forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  }, []);
+  useEffect(() => {
     if (!currentUser) return;
     Outbox.load(currentUser.id);
     const un = Outbox.subscribe(setOutbox);
@@ -4846,7 +4905,7 @@ function App() {
       const b = updated[k] == null ? "" : updated[k];
       if (String(a) !== String(b)) {
         changes[k] = b;
-        base[k] = a;
+        if (TEXT_FIELDS_C[k]) base[k] = textHash(a);
       }
     });
     if (!Object.keys(changes).length) return;
@@ -4971,7 +5030,7 @@ function App() {
   };
   const handleSaveUser = async u => {
     try {
-      const r = await api({
+      const r = await apiPost({
         action: "saveUser",
         user: JSON.stringify(u)
       });
@@ -5126,25 +5185,40 @@ function App() {
     setImportBusy(false);
   };
   const pendingSet = useMemo(() => Outbox.pendingIds(), [outbox]);
+
+  // الفلترة والتنبيهات بتتحسب مرة واحدة ومش بتتعاد غير لما الداتا أو الفلتر يتغير
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  useMemo(() => {
+    growList(NICHES, leads.map(l => l.niche));
+    growList(SOURCES, leads.map(l => l.source));
+  }, [leads]);
+  const visibleLeads = useMemo(() => {
+    if (!currentUser) return [];
+    if (can.allLeads(currentUser)) return leads;
+    return leads.filter(l => {
+      if (currentUser.role === "outreach") return l.teleAgent === currentUser.id;
+      if (currentUser.role === "sales") return l.salesAgent === currentUser.id || l.teleStage === "meeting_booked";
+      return l.teleAgent === currentUser.id || l.salesAgent === currentUser.id;
+    });
+  }, [leads, currentUser]);
+  const filteredLeads = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q && !fNiche && !fSource && !fPriority && !fTeleStage && !fSalesStage && !fCountry) return visibleLeads;
+    return visibleLeads.filter(l => {
+      const mq = !q || (l.clientName || "").toLowerCase().includes(q) || String(l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
+      return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage) && (!fCountry || (l.country || "SA") === fCountry);
+    });
+  }, [visibleLeads, search, fNiche, fSource, fPriority, fTeleStage, fSalesStage, fCountry]);
+  const leadAlerts = useMemo(() => visibleLeads.flatMap(getLeadAlerts), [visibleLeads]);
+  const renewalAlerts = useMemo(() => (currentUser && can.renewals(currentUser) ? renewals : []).map(getRenewalAlert).filter(Boolean), [renewals, currentUser]);
+  const dashRenewals = useMemo(() => currentUser && can.renewals(currentUser) ? renewals : [], [renewals, currentUser]);
   if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
     onLogin: login,
     notice: loginNotice
   });
-  growList(NICHES, leads.map(l => l.niche));
-  growList(SOURCES, leads.map(l => l.source));
-  const visibleLeads = leads.filter(l => {
-    if (can.allLeads(currentUser)) return true;
-    if (currentUser.role === "outreach") return l.teleAgent === currentUser.id;
-    if (currentUser.role === "sales") return l.salesAgent === currentUser.id || l.teleStage === "meeting_booked";
-    return l.teleAgent === currentUser.id || l.salesAgent === currentUser.id;
-  });
-  const filteredLeads = visibleLeads.filter(l => {
-    const q = search.toLowerCase();
-    const mq = !q || (l.clientName || "").toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
-    return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage) && (!fCountry || (l.country || "SA") === fCountry);
-  });
-  const leadAlerts = visibleLeads.flatMap(getLeadAlerts);
-  const renewalAlerts = (can.renewals(currentUser) ? renewals : []).map(getRenewalAlert).filter(Boolean);
   const alertCount = leadAlerts.length + renewalAlerts.length;
   const TABS = [{
     id: "dashboard",
@@ -5362,9 +5436,9 @@ function App() {
       fontSize: 12,
       marginBottom: 12
     }
-  }, "⚠️ السيرفر (Apps Script) لسه على النسخة القديمة — الصق كود v8 واعمل New version عشان الحماية والسرعة الجديدة تشتغل، وبعدين اخرج وادخل تاني."), tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
+  }, "⚠️ السيرفر (Apps Script) لسه على النسخة القديمة — الصق كود v8 واعمل New version عشان الحماية والسرعة الجديدة تشتغل، وبعدين اخرج وادخل تاني."), tab === "dashboard" && /*#__PURE__*/React.createElement(DashboardMemo, {
     leads: visibleLeads,
-    renewals: can.renewals(currentUser) ? renewals : [],
+    renewals: dashRenewals,
     user: currentUser,
     period: period,
     setPeriod: setPeriod,
@@ -5446,8 +5520,8 @@ function App() {
       boxShadow: T.shadow
     }
   }, /*#__PURE__*/React.createElement("input", {
-    value: search,
-    onChange: e => setSearch(e.target.value),
+    value: searchInput,
+    onChange: e => setSearchInput(e.target.value),
     placeholder: "🔍 بحث بالاسم أو الرقم...",
     style: {
       ...inputS,
@@ -5474,9 +5548,10 @@ function App() {
   })), "مراحل المبيعات"), filterSel(fCountry, setFCountry, Object.keys(COUNTRY_NAMES).map(k => ({
     value: k,
     label: COUNTRY_NAMES[k]
-  })), "كل الدول"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || fCountry || search) && /*#__PURE__*/React.createElement("button", {
+  })), "كل الدول"), (fNiche || fSource || fPriority || fTeleStage || fSalesStage || fCountry || searchInput) && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setSearch("");
+      setSearchInput("");
       setFNiche("");
       setFSource("");
       setFPriority("");
