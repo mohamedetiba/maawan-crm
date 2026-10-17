@@ -132,12 +132,6 @@ const PERM_DEFS = [{
   key: "allLeads",
   label: "عرض جميع العملاء المحتملين"
 }, {
-  key: "whatsapp",
-  label: "يستخدم الواتساب"
-}, {
-  key: "allChats",
-  label: "يشوف كل المحادثات"
-}, {
   key: "renewals",
   label: "يشوف التجديدات"
 }, {
@@ -146,8 +140,6 @@ const PERM_DEFS = [{
 }];
 const roleDefault = {
   allLeads: r => ["manager", "sales_manager", "team_leader_sales"].includes(r),
-  whatsapp: r => true,
-  allChats: r => r === "manager",
   renewals: r => ["manager", "sales_manager", "account_manager", "am_team_leader"].includes(r),
   finance: r => r === "manager"
 };
@@ -155,7 +147,7 @@ const can = {};
 Object.keys(roleDefault).forEach(k => {
   can[k] = u => u?.perms && u.perms[k] !== undefined && u.perms[k] !== "" ? !!u.perms[k] : roleDefault[k](u?.role);
 });
-can.seeAllRenewals = u => can.allChats(u) || ["manager", "sales_manager", "am_team_leader"].includes(u?.role);
+can.seeAllRenewals = u => ["manager", "sales_manager", "am_team_leader"].includes(u?.role);
 can.rules = u => u?.role === "manager";
 const TELE_STAGES = [{
   id: "new_lead",
@@ -286,27 +278,6 @@ const CYCLES = [{
   l: "سنوي"
 }];
 const EXPENSE_CATS = ["مرتبات", "إيجارات", "أوبريشنز", "أدوات وسوفتوير", "إعلانات", "مواصلات", "أخرى"];
-const DEFAULT_FUNNEL = [{
-  id: "interested",
-  label: "مهتم",
-  color: "#86cdb2"
-}, {
-  id: "not_interested",
-  label: "غير مهتم",
-  color: "#f0a3a3"
-}, {
-  id: "follow_up",
-  label: "محتاج متابعة",
-  color: "#ecc98a"
-}, {
-  id: "meeting",
-  label: "اجتماع مجدوَل",
-  color: "#a9d0e8"
-}, {
-  id: "no_answer",
-  label: "لا يستجيب",
-  color: "#9fb0bf"
-}];
 const FALAK_LOGO_WHITE = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%22661.0%20459.0%20598.0%20162.0%22%20fill%3D%22%23ffffff%22%3E%3Cpath%20d%3D%22M807.94%20518.30%20C807.94%20520.25%20806.39%20521.80%20804.45%20521.89%20C768.00%20523.64%20737.53%20548.14%20726.90%20581.49%20C725.86%20584.74%20729.59%20587.51%20732.36%20585.53%20C752.75%20570.91%20777.50%20562.00%20804.29%20561.13%20C806.30%20561.07%20807.94%20562.71%20807.94%20564.72%20L807.94%20599.88%20C807.94%20601.85%20806.35%20603.44%20804.39%20603.44%20L681.27%20603.44%20C679.30%20603.44%20677.69%20601.78%20677.80%20599.80%20C681.74%20532.46%20736.50%20478.75%20804.29%20476.56%20C806.30%20476.50%20807.94%20478.13%20807.94%20480.14%20L807.94%20518.30%20M695.67%20476.56%20C697.55%20491.03%20699.07%20492.55%20713.54%20494.43%20C699.07%20496.31%20697.55%20497.83%20695.67%20512.30%20C693.79%20497.83%20692.26%20496.31%20677.80%20494.43%20C692.26%20492.55%20693.79%20491.03%20695.67%20476.56%20M802.72%20458.69%20L682.88%20458.69%20C671.06%20458.69%20661.49%20468.26%20661.49%20480.08%20L661.49%20599.92%20C661.49%20611.73%20671.06%20621.31%20682.88%20621.31%20L802.72%20621.31%20C814.53%20621.31%20824.11%20611.73%20824.11%20599.92%20L824.11%20480.08%20C824.11%20468.26%20814.53%20458.69%20802.72%20458.69Z%22/%3E%3Cpath%20d%3D%22M861.23%20476.48%20L929.34%20476.48%20C930.10%20476.48%20930.72%20477.09%20930.72%20477.86%20L930.72%20492.23%20C930.72%20492.99%20930.10%20493.61%20929.34%20493.61%20L878.36%20493.61%20C877.60%20493.61%20876.98%20494.23%20876.98%20494.99%20L876.98%20498.83%20C876.98%20499.59%20877.60%20500.21%20878.36%20500.21%20L927.41%20500.21%20C928.17%20500.21%20928.79%20500.83%20928.79%20501.59%20L928.79%20515.88%20C928.79%20516.64%20928.17%20517.26%20927.41%20517.26%20L878.36%20517.26%20C877.60%20517.26%20876.98%20517.88%20876.98%20518.64%20L876.98%20533.01%20C876.98%20533.78%20876.37%20534.39%20875.60%20534.39%20L861.23%20534.39%20C860.47%20534.39%20859.85%20533.78%20859.85%20533.01%20L859.85%20477.86%20C859.85%20477.09%20860.47%20476.48%20861.23%20476.48Z%22/%3E%3Cpath%20d%3D%22M1013.35%20532.86%20L1013.27%20477.86%20C1013.27%20477.10%201013.89%20476.48%201014.65%20476.48%20L1029.02%20476.48%20C1029.78%20476.48%201030.40%20477.09%201030.40%20477.86%20L1030.40%20515.88%20C1030.40%20516.64%201031.02%20517.26%201031.78%20517.26%20L1087.48%20517.26%20C1088.24%20517.26%201088.86%20517.88%201088.86%20518.64%20L1088.86%20533.01%20C1088.86%20533.77%201088.24%20534.39%201087.47%20534.39%20L1014.72%20534.24%20C1013.96%20534.24%201013.35%20533.62%201013.35%20532.86Z%22/%3E%3Cpath%20d%3D%22M997.52%20534.25%20L1014.00%20534.25%20C1015.06%20534.25%201015.72%20533.10%201015.20%20532.18%20L991.06%20489.90%20C986.32%20481.60%20977.50%20476.48%20967.94%20476.48%20C958.38%20476.48%20949.54%20481.61%20944.81%20489.92%20L920.74%20532.18%20C920.22%20533.10%20920.89%20534.25%20921.95%20534.25%20L938.42%20534.25%20C938.92%20534.25%20939.38%20533.98%20939.62%20533.55%20L959.68%20498.36%20C961.37%20495.40%20964.52%20493.57%20967.94%20493.57%20C971.35%20493.57%20974.49%20495.39%20976.18%20498.35%20L996.32%20533.55%20C996.57%20533.98%20997.02%20534.25%20997.52%20534.25Z%22/%3E%3Cpath%20d%3D%22M1163.78%20534.25%20L1180.25%20534.25%20C1181.31%20534.25%201181.98%20533.10%201181.45%20532.18%20L1157.32%20489.90%20C1152.58%20481.60%201143.76%20476.48%201134.20%20476.48%20C1124.63%20476.48%201115.80%20481.61%201111.07%20489.92%20L1087.00%20532.18%20C1086.48%20533.10%201087.14%20534.25%201088.20%20534.25%20L1104.68%20534.25%20C1105.18%20534.25%201105.64%20533.98%201105.88%20533.55%20L1125.94%20498.36%20C1127.63%20495.40%201130.78%20493.57%201134.19%20493.57%20C1137.60%20493.57%201140.75%20495.39%201142.44%20498.35%20L1162.58%20533.55%20C1162.82%20533.98%201163.28%20534.25%201163.78%20534.25Z%22/%3E%3Cpath%20d%3D%22M1134.26%20532.49%20C1134.27%20532.49%201134.27%20532.49%201134.27%20532.49%20C1134.31%20525.21%201140.19%20519.32%201147.46%20519.25%20C1147.45%20519.24%201147.43%20519.22%201147.42%20519.20%20C1140.14%20519.11%201134.27%20513.18%201134.27%20505.88%20C1134.27%20513.19%201128.39%20519.11%201121.11%20519.20%20C1121.07%20519.22%201121.03%20519.23%201121.00%20519.25%20C1128.30%20519.28%201134.22%20525.19%201134.26%20532.49Z%22/%3E%3Cpath%20d%3D%22M967.80%20532.49%20C967.80%20532.49%20967.81%20532.49%20967.81%20532.49%20C967.85%20525.21%20973.73%20519.32%20981.00%20519.25%20C980.98%20519.24%20980.97%20519.22%20980.95%20519.20%20C973.68%20519.11%20967.81%20513.18%20967.81%20505.88%20C967.81%20513.19%20961.93%20519.11%20954.65%20519.20%20C954.61%20519.22%20954.57%20519.23%20954.53%20519.25%20C961.84%20519.28%20967.76%20525.19%20967.80%20532.49Z%22/%3E%3Cpath%20d%3D%22M1250.00%20566.60%20C1250.00%20567.02%201249.98%20567.35%201249.93%20567.62%20C1249.89%20567.88%201249.83%20568.11%201249.76%20568.29%20C1249.51%20568.86%201249.04%20569.27%201248.35%20569.50%20C1247.66%20569.73%201246.76%20569.84%201245.66%20569.84%20L1239.18%20569.84%20C1238.58%20569.82%201238.10%20569.75%201237.73%20569.65%20C1237.37%20569.55%201237.08%20569.38%201236.87%20569.15%20C1236.67%20568.92%201236.53%20568.61%201236.46%20568.20%20C1236.39%20567.80%201236.36%20567.27%201236.36%20566.60%20L1236.36%20560.47%20C1236.36%20559.59%201236.49%20558.89%201236.77%20558.37%20C1237.05%20557.84%201237.40%20557.50%201237.84%20557.37%20C1238.07%20557.32%201238.42%20557.27%201238.91%20557.23%20C1239.39%20557.18%201239.97%20557.16%201240.66%20557.16%20L1250.00%20557.16%20L1250.00%20566.60%20M1237.84%20550.65%20C1236.87%20550.65%201236.03%20550.68%201235.31%20550.73%20C1234.58%20550.79%201233.97%20550.88%201233.46%20550.99%20C1232.01%20551.24%201230.97%20551.92%201230.34%20553.01%20C1229.71%20554.10%201229.40%20555.76%201229.40%20557.99%20L1229.40%20569.77%20L1225.95%20569.77%20L1225.95%20569.81%20L1223.95%20569.84%20C1223.22%20569.59%201222.68%20569.20%201222.33%20568.67%20C1221.99%20568.14%201221.81%20567.43%201221.81%20566.53%20L1221.81%20542.20%20L1214.85%20542.20%20L1214.85%20566.46%20C1214.85%20568.14%201214.17%20569.20%201212.82%20569.63%20C1212.73%20569.66%201212.45%20569.68%201211.99%20569.70%20C1211.69%20569.72%201211.35%20569.75%201211.03%20569.77%20L905.54%20569.77%20L904.96%20569.77%20L902.37%20569.77%20L902.37%20542.31%20L895.48%20542.31%20L895.48%20569.77%20L868.98%20569.77%20C867.51%20569.43%20866.78%20568.35%20866.78%20566.53%20L866.78%20550.65%20L859.85%20550.65%20L859.85%20568.91%20C859.85%20571.07%20860.14%20572.70%20860.73%20573.80%20C861.31%20574.91%20862.26%20575.62%20863.57%20575.94%20C864.76%20576.22%20866.36%20576.35%20868.36%20576.35%20L904.96%20576.35%20L905.54%20576.35%20L1210.55%20576.35%20L1211.13%20576.35%20L1214.51%20576.35%20L1214.51%20576.32%20C1214.49%20576.32%201214.43%20576.31%201214.34%20576.28%20L1214.27%20576.28%20C1214.27%20576.26%201214.29%20576.25%201214.34%20576.25%20C1215.19%20576.07%201215.98%20575.53%201216.71%20574.63%20C1217.45%20573.73%201218.10%20572.49%201218.68%20570.91%20C1219.99%20574.22%201221.66%20576.02%201223.71%20576.32%20L1225.95%20576.32%20L1225.95%20576.35%20L1248.45%20576.35%20C1249.46%20576.35%201250.33%20576.34%201251.05%20576.30%20C1251.78%20576.27%201252.37%20576.19%201252.83%20576.08%20L1252.79%20576.08%20C1253.53%20575.92%201254.16%20575.67%201254.69%20575.34%20C1255.22%20575.00%201255.65%20574.56%201255.98%20573.99%20C1256.31%20573.43%201256.56%20572.74%201256.72%20571.93%20C1256.88%20571.11%201256.96%20570.13%201256.96%20568.98%20L1257.00%20550.65%20L1237.84%20550.65Z%22/%3E%3Cpath%20d%3D%22M859.85%20588.28H862.48V603.24H859.85ZZ%22/%3E%3Cpath%20d%3D%22M889.23%20588.28%20L889.23%20603.24%20L886.09%20603.24%20L877.09%20591.43%20L877.09%20603.24%20L874.44%20603.24%20L874.44%20588.28%20L877.58%20588.28%20L886.60%20600.10%20L886.60%20588.28%20L889.23%20588.28Z%22/%3E%3Cpath%20d%3D%22M915.06%20598.73%20C915.06%20601.56%20912.95%20603.56%20907.71%20603.56%20C902.13%20603.56%20899.91%20601.49%20899.91%20598.80%20L902.73%20598.80%20C902.82%20600.36%20904.57%20601.34%20907.80%20601.34%20C910.57%20601.34%20912.33%20600.66%20912.33%20599.06%20C912.33%20597.26%20909.85%20597.41%20905.68%20596.73%20C902.09%20596.15%20900.42%20594.99%20900.42%20592.56%20C900.42%20589.95%20902.32%20587.98%20907.26%20587.98%20C912.39%20587.98%20914.34%20590.31%20914.34%20592.45%20L911.64%20592.45%20C911.51%20591.36%20910.38%20590.21%20907.20%20590.21%20C903.86%20590.21%20903.07%20591.21%20903.07%20592.37%20C903.07%20593.99%20905.08%20594.16%20908.29%20594.61%20C912.52%20595.19%20915.06%20595.83%20915.06%20598.73Z%22/%3E%3Cpath%20d%3D%22M937.62%20593.22%20C937.62%20591.53%20936.70%20590.51%20934.48%20590.51%20L928.58%20590.51%20L928.58%20595.98%20L934.52%20595.98%20C936.83%20595.98%20937.62%20594.78%20937.62%20593.22%20M940.34%20593.22%20C940.34%20596.08%20938.65%20598.18%20934.52%20598.18%20L928.58%20598.18%20L928.58%20603.24%20L925.95%20603.24%20L925.95%20588.28%20L934.93%20588.28%20C938.99%20588.28%20940.34%20590.66%20940.34%20593.22Z%22/%3E%3Cpath%20d%3D%22M951.44%20588.28H954.07V603.24H951.44ZZ%22/%3E%3Cpath%20d%3D%22M968.66%20595.79%20L974.65%20595.79%20C976.72%20595.79%20977.92%20594.89%20977.92%20593.11%20C977.92%20591.30%20976.79%20590.51%20974.65%20590.51%20L968.66%20590.51%20L968.66%20595.79%20M978.09%20603.24%20L974.80%20597.97%20C974.65%20597.97%20974.48%20597.99%20974.33%20597.99%20L968.66%20597.99%20L968.66%20603.24%20L966.04%20603.24%20L966.04%20588.28%20L975.18%20588.28%20C978.90%20588.28%20980.61%20590.23%20980.61%20593.11%20C980.61%20595.21%20979.54%20596.77%20977.43%20597.52%20L981.12%20603.24%20L978.09%20603.24Z%22/%3E%3Cpath%20d%3D%22M992.02%20588.28H994.65V603.24H992.02ZZ%22/%3E%3Cpath%20d%3D%22M1021.40%20588.28%20L1021.40%20603.24%20L1018.26%20603.24%20L1009.26%20591.43%20L1009.26%20603.24%20L1006.61%20603.24%20L1006.61%20588.28%20L1009.75%20588.28%20L1018.77%20600.10%20L1018.77%20588.28%20L1021.40%20588.28Z%22/%3E%3Cpath%20d%3D%22M1041.24%20603.56%20C1036.46%20603.56%201032.50%20600.94%201032.50%20595.76%20C1032.50%20590.59%201036.61%20587.98%201040.92%20587.98%20C1044.84%20587.98%201047.78%20589.78%201048.77%20593.07%20L1045.95%20593.07%20C1045.33%20591.62%201044.00%20590.19%201040.92%20590.19%20C1037.35%20590.19%201035.22%20592.49%201035.22%20595.76%20C1035.22%20599.05%201037.53%20601.36%201041.27%20601.36%20C1045.01%20601.36%201046.33%20599.12%201046.48%20597.17%20L1041.31%20597.17%20L1041.31%20594.95%20L1049.15%20594.95%20C1049.54%20600.42%201046.52%20603.56%201041.24%20603.56Z%22/%3E%3Cpath%20d%3D%22M1088.91%20598.73%20C1088.91%20601.56%201086.80%20603.56%201081.56%20603.56%20C1075.98%20603.56%201073.76%20601.49%201073.76%20598.80%20L1076.58%20598.80%20C1076.67%20600.36%201078.42%20601.34%201081.65%20601.34%20C1084.42%20601.34%201086.18%20600.66%201086.18%20599.06%20C1086.18%20597.26%201083.70%20597.41%201079.53%20596.73%20C1075.94%20596.15%201074.27%20594.99%201074.27%20592.56%20C1074.27%20589.95%201076.17%20587.98%201081.11%20587.98%20C1086.24%20587.98%201088.19%20590.31%201088.19%20592.45%20L1085.49%20592.45%20C1085.36%20591.36%201084.23%20590.21%201081.05%20590.21%20C1077.71%20590.21%201076.92%20591.21%201076.92%20592.37%20C1076.92%20593.99%201078.93%20594.16%201082.14%20594.61%20C1086.37%20595.19%201088.91%20595.83%201088.91%20598.73Z%22/%3E%3Cpath%20d%3D%22M1113.48%20595.76%20C1113.48%20592.45%201111.37%20590.19%201107.58%20590.19%20C1103.78%20590.19%201101.66%20592.45%201101.66%20595.76%20C1101.66%20599.10%201103.78%20601.36%201107.58%20601.36%20C1111.37%20601.36%201113.48%20599.10%201113.48%20595.76%20M1116.20%20595.76%20C1116.20%20600.94%201112.24%20603.57%201107.58%20603.57%20C1102.90%20603.57%201098.95%20600.94%201098.95%20595.76%20C1098.95%20590.59%201102.90%20587.98%201107.58%20587.98%20C1112.24%20587.98%201116.20%20590.59%201116.20%20595.76Z%22/%3E%3Cpath%20d%3D%22M1139.63%20603.24%20L1127.30%20603.24%20L1127.30%20588.28%20L1129.93%20588.28%20L1129.93%20601.02%20L1139.63%20601.02%20L1139.63%20603.24Z%22/%3E%3Cpath%20d%3D%22M1164.93%20588.28%20L1164.93%20597.28%20C1164.93%20602.52%201161.45%20603.57%201157.84%20603.57%20C1154.20%20603.57%201150.74%20602.52%201150.74%20597.28%20L1150.74%20588.28%20L1153.37%20588.28%20L1153.37%20597.09%20C1153.37%20600.15%201154.74%20601.36%201157.84%20601.36%20C1160.93%20601.36%201162.28%20600.15%201162.28%20597.09%20L1162.28%20588.28%20L1164.93%20588.28Z%22/%3E%3Cpath%20d%3D%22M1189.99%20590.51%20L1184.33%20590.51%20L1184.33%20603.24%20L1181.70%20603.24%20L1181.70%20590.51%20L1176.04%20590.51%20L1176.04%20588.28%20L1189.99%20588.28%20L1189.99%20590.51Z%22/%3E%3Cpath%20d%3D%22M1201.10%20588.28H1203.73V603.24H1201.10ZZ%22/%3E%3Cpath%20d%3D%22M1229.37%20595.76%20C1229.37%20592.45%201227.25%20590.19%201223.47%20590.19%20C1219.67%20590.19%201217.55%20592.45%201217.55%20595.76%20C1217.55%20599.10%201219.67%20601.36%201223.47%20601.36%20C1227.25%20601.36%201229.37%20599.10%201229.37%20595.76%20M1232.08%20595.76%20C1232.08%20600.94%201228.13%20603.57%201223.47%20603.57%20C1218.79%20603.57%201214.84%20600.94%201214.84%20595.76%20C1214.84%20590.59%201218.79%20587.98%201223.47%20587.98%20C1228.13%20587.98%201232.08%20590.59%201232.08%20595.76Z%22/%3E%3Cpath%20d%3D%22M1257.98%20588.28%20L1257.98%20603.24%20L1254.84%20603.24%20L1245.84%20591.43%20L1245.84%20603.24%20L1243.19%20603.24%20L1243.19%20588.28%20L1246.33%20588.28%20L1255.35%20600.10%20L1255.35%20588.28%20L1257.98%20588.28Z%22/%3E%3Cpath%20d%3D%22M1256.92%20531.68%20L1244.70%20524.64%20C1244.80%20524.85%201244.88%20525.07%201244.91%20525.31%20C1245.44%20529.40%201248.19%20532.77%201251.85%20534.26%20L1256.23%20534.26%20C1257.65%20534.26%201258.15%20532.38%201256.92%20531.68Z%22/%3E%3Cpath%20d%3D%22M1230.14%20534.26%20L1233.56%20534.26%20C1237.22%20532.77%201239.98%20529.40%201240.50%20525.31%20C1240.54%20525.02%201240.53%20524.74%201240.63%20524.46%20C1240.82%20523.98%201241.23%20523.60%201241.73%20523.44%20C1241.96%20523.37%201242.21%20523.36%201242.45%20523.35%20L1218.61%20509.63%20C1217.74%20509.13%201217.68%20507.90%201218.49%20507.32%20L1257.94%20478.84%20C1259.03%20478.05%201258.47%20476.34%201257.13%20476.34%20L1230.33%20476.34%20C1230.03%20476.34%201229.74%20476.44%201229.50%20476.62%20L1199.54%20499.34%20C1198.91%20499.74%201198.18%20499.96%201197.43%20499.96%20L1194.97%20499.96%20C1194.21%20499.96%201193.59%20499.34%201193.59%20498.58%20L1193.59%20477.72%20C1193.59%20476.96%201192.97%20476.34%201192.21%20476.34%20L1177.84%20476.34%20C1177.08%20476.34%201176.46%20476.95%201176.46%20477.71%20C1176.46%20478.16%201176.46%20478.76%201176.46%20479.55%20L1176.46%20534.25%20L1182.18%20534.25%20L1182.18%20534.26%20L1192.21%20534.26%20C1192.97%20534.26%201193.59%20533.64%201193.59%20532.87%20L1193.59%20518.48%20C1193.59%20517.71%201194.21%20517.10%201194.97%20517.10%20L1197.44%20517.10%20C1198.18%20517.10%201198.91%20517.31%201199.53%20517.72%20L1229.48%20534.09%20C1229.69%20534.20%201229.91%20534.26%201230.14%20534.26Z%22/%3E%3Cpath%20d%3D%22M1242.30%20547.29%20C1242.41%20547.73%201243.01%20547.75%201243.13%20547.31%20C1243.59%20545.49%201244.56%20543.20%201246.59%20541.16%20C1250.35%20537.39%201254.99%20537.25%201255.90%20537.24%20C1255.88%20537.22%201255.87%20537.21%201255.85%20537.19%20C1249.15%20537.10%201243.64%20532.07%201242.81%20525.58%20C1242.79%20525.41%201242.62%20525.41%201242.60%20525.58%20C1241.77%20532.08%201236.25%20537.11%201229.54%20537.19%20C1229.51%20537.21%201229.47%20537.22%201229.43%20537.23%20C1235.64%20537.26%201240.84%20541.53%201242.30%20547.29Z%22/%3E%3Cpath%20d%3D%22M887.24%20560.49%20C887.43%20560.49%20887.59%20560.33%20887.59%20560.14%20L887.59%20556.65%20C887.59%20556.45%20887.43%20556.29%20887.23%20556.29%20C884.57%20556.38%20882.12%20557.26%20880.09%20558.71%20C879.82%20558.91%20879.45%20558.64%20879.55%20558.31%20C880.61%20555.00%20883.63%20552.57%20887.24%20552.40%20C887.44%20552.39%20887.59%20552.24%20887.59%20552.04%20L887.59%20548.26%20C887.59%20548.06%20887.43%20547.90%20887.23%20547.90%20C880.50%20548.12%20875.07%20553.45%20874.68%20560.13%20C874.67%20560.33%20874.83%20560.49%20875.02%20560.49%20L887.24%20560.49Z%22/%3E%3C/svg%3E";
 
 // Orbit decoration — the logo's sweeping arc as concentric rings
@@ -353,13 +324,6 @@ const waLink = (phone, country) => {
   const code = String(country || "+966").replace(/\D/g, "") || "966";
   return "https://wa.me/" + code + p;
 };
-const toChatId = (phone, country) => {
-  const p = normPhone(phone);
-  if (!p) return null;
-  const code = String(country || "+966").replace(/\D/g, "") || "966";
-  return code + p + "@c.us";
-};
-const chatIdToPhone = cid => String(cid || "").replace("@c.us", "").replace("@s.whatsapp.net", "");
 const timeAgo = ts => {
   if (!ts) return "";
   const d = new Date(ts);
@@ -400,19 +364,22 @@ function getPeriodItems(items, period, dateKey) {
     return true;
   });
 }
-function jsonpCall(params, timeoutMs = 60000) {
+function jsonpCall(params, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const cbName = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
     const script = document.createElement("script");
-    const timeout = setTimeout(() => {
+    const cleanup = () => {
       delete window[cbName];
       if (script.parentNode) script.parentNode.removeChild(script);
+    };
+    const timeout = setTimeout(() => {
+      window[cbName] = () => {};
+      cleanup();
       reject(new Error("timeout"));
     }, timeoutMs);
     window[cbName] = data => {
       clearTimeout(timeout);
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
+      cleanup();
       resolve(data);
     };
     const qs = new URLSearchParams({
@@ -422,11 +389,267 @@ function jsonpCall(params, timeoutMs = 60000) {
     script.src = SCRIPT_URL + "?" + qs;
     script.onerror = () => {
       clearTimeout(timeout);
+      cleanup();
       reject(new Error("network"));
     };
     document.head.appendChild(script);
   });
 }
+
+// ══════════ الجلسة والاتصال بالسيرفر ══════════
+const SESSION = {
+  token: "",
+  uid: "",
+  role: "",
+  v8: false,
+  onAuthError: null
+};
+async function api(params, timeoutMs) {
+  const res = await jsonpCall({
+    ...params,
+    token: SESSION.token,
+    userId: SESSION.uid,
+    role: SESSION.role
+  }, timeoutMs);
+  if (res && res.authError && SESSION.onAuthError) SESSION.onAuthError(res.error);
+  return res;
+}
+const newId = (p = "L") => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// ══════════ تخزين محلي (IndexedDB) — فتح فوري للسستم من غير ما نستنى السيرفر ══════════
+const IDB = {
+  db: null,
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((res, rej) => {
+      try {
+        const r = indexedDB.open("falak_crm", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("kv");
+        r.onsuccess = () => {
+          this.db = r.result;
+          res(this.db);
+        };
+        r.onerror = () => rej(r.error);
+      } catch (e) {
+        rej(e);
+      }
+    });
+  },
+  async get(k) {
+    try {
+      const db = await this.open();
+      return await new Promise(res => {
+        const q = db.transaction("kv").objectStore("kv").get(k);
+        q.onsuccess = () => res(q.result);
+        q.onerror = () => res(undefined);
+      });
+    } catch (e) {
+      return undefined;
+    }
+  },
+  async set(k, v) {
+    try {
+      const db = await this.open();
+      await new Promise(res => {
+        const t = db.transaction("kv", "readwrite");
+        t.objectStore("kv").put(v, k);
+        t.oncomplete = res;
+        t.onerror = res;
+        t.onabort = res;
+      });
+    } catch (e) {}
+  },
+  async del(k) {
+    try {
+      const db = await this.open();
+      await new Promise(res => {
+        const t = db.transaction("kv", "readwrite");
+        t.objectStore("kv").delete(k);
+        t.oncomplete = res;
+        t.onerror = res;
+      });
+    } catch (e) {}
+  }
+};
+
+// ══════════ صندوق الحفظ (Outbox) ══════════
+// كل تعديل بيتحفظ على الجهاز الأول، وبعدين يتبعت للسيرفر بالترتيب.
+// لو النت فصل أو السيرفر اتأخر، التعديل مش بيضيع — بيتبعت تاني تلقائي لحد ما يتحفظ.
+const Outbox = {
+  key: "",
+  ops: [],
+  running: false,
+  listeners: new Set(),
+  timer: null,
+  lastError: "",
+  load(uid) {
+    this.key = "falak_outbox_" + uid;
+    try {
+      this.ops = JSON.parse(localStorage.getItem(this.key) || "[]");
+    } catch (e) {
+      this.ops = [];
+    }
+    this.emit();
+  },
+  persist() {
+    try {
+      localStorage.setItem(this.key, JSON.stringify(this.ops));
+    } catch (e) {}
+    this.emit();
+  },
+  emit() {
+    this.listeners.forEach(f => {
+      try {
+        f(this.ops.slice());
+      } catch (e) {}
+    });
+  },
+  subscribe(f) {
+    this.listeners.add(f);
+    f(this.ops.slice());
+    return () => this.listeners.delete(f);
+  },
+  push(op) {
+    op.opId = op.opId || "op" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    op.tries = 0;
+    op.at = Date.now();
+    // نجمع تعديلات نفس العميل اللي لسه ماتبعتتش في عملية واحدة
+    if (op.action === "patchLead") {
+      const prev = this.ops.find(o => o.action === "patchLead" && o.id === op.id && !o.sending);
+      if (prev) {
+        prev.changes = {
+          ...prev.changes,
+          ...op.changes
+        };
+        if (op.legacyLead) prev.legacyLead = op.legacyLead;
+        Object.keys(op.base || {}).forEach(k => {
+          if (!(k in prev.base)) prev.base[k] = op.base[k];
+        });
+        this.persist();
+        this.run();
+        return prev;
+      }
+    }
+    this.ops.push(op);
+    this.persist();
+    this.run();
+    return op;
+  },
+  pendingIds() {
+    const s = new Set();
+    this.ops.forEach(o => {
+      if (o.id) s.add(String(o.id));
+      if (o.leadId) s.add(String(o.leadId));
+      if (o.lead) s.add(String(o.lead.id));
+    });
+    return s;
+  },
+  toParams(op) {
+    const legacy = !SESSION.v8;
+    switch (op.action) {
+      case "createLead":
+        return legacy ? {
+          action: "saveLead",
+          lead: JSON.stringify(op.lead)
+        } : {
+          action: "createLead",
+          lead: JSON.stringify(op.lead)
+        };
+      case "patchLead":
+        return legacy ? {
+          action: "saveLead",
+          lead: JSON.stringify({
+            ...(op.legacyLead || {
+              id: op.id
+            }),
+            ...op.changes
+          })
+        } : {
+          action: "patchLead",
+          id: op.id,
+          changes: JSON.stringify(op.changes),
+          base: JSON.stringify(op.base || {})
+        };
+      case "addActivity":
+        return {
+          action: "addActivity",
+          leadId: op.leadId,
+          entry: JSON.stringify(op.entry),
+          userId: SESSION.uid
+        };
+      default:
+        return {
+          action: op.action,
+          ...(op.params || {})
+        };
+    }
+  },
+  async run() {
+    if (this.running || !this.ops.length || !SESSION.uid) return;
+    this.running = true;
+    clearTimeout(this.timer);
+    try {
+      while (this.ops.length) {
+        const op = this.ops[0];
+        op.sending = true;
+        let res;
+        try {
+          res = await api({
+            ...this.toParams(op),
+            opId: op.opId
+          }, 45000);
+        } catch (e) {
+          op.sending = false;
+          op.tries++;
+          this.lastError = "مفيش اتصال بالسيرفر";
+          this.persist();
+          const wait = Math.min(60000, 4000 * Math.pow(2, Math.min(op.tries, 4)));
+          this.timer = setTimeout(() => this.run(), wait);
+          return;
+        }
+        op.sending = false;
+        if (res && res.authError) {
+          this.lastError = "الجلسة انتهت";
+          this.persist();
+          return;
+        }
+        if (res && res.success) {
+          this.ops.shift();
+          this.lastError = "";
+          this.persist();
+          Outbox.onResult && Outbox.onResult(op, res);
+          continue;
+        }
+        if (res && res.busy) {
+          op.tries++;
+          this.persist();
+          this.timer = setTimeout(() => this.run(), 5000);
+          return;
+        }
+        // رفض نهائي من السيرفر (مكرر / مش مسموح) — نشيله من الطابور ونبلّغ
+        this.ops.shift();
+        this.persist();
+        Outbox.onResult && Outbox.onResult(op, res || {
+          success: false,
+          error: "رد غير متوقع من السيرفر"
+        });
+      }
+    } finally {
+      this.running = false;
+    }
+  },
+  clear() {
+    this.ops = [];
+    this.persist();
+  }
+};
+window.addEventListener("online", () => Outbox.run());
+window.addEventListener("beforeunload", e => {
+  if (Outbox.ops.length) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 
 // تنبيهات المواعيد
 function getLeadAlerts(lead) {
@@ -777,7 +1000,8 @@ function PhoneInput({
   }));
 }
 function LoginScreen({
-  onLogin
+  onLogin,
+  notice
 }) {
   const saved = (() => {
     try {
@@ -802,7 +1026,11 @@ function LoginScreen({
         username: u.trim(),
         password: p.trim()
       });
-      if (res.success && res.user) user = res.user;else setErr(res.error || "اسم المستخدم أو كلمة المرور غلط");
+      if (res.success && res.user) user = {
+        ...res.user,
+        token: res.token || "",
+        v8: !!(res.apiVersion && res.token)
+      };else setErr(res.error || "اسم المستخدم أو كلمة المرور غلط");
     } catch (e) {
       setErr("مشكلة في الاتصال بالسيرفر — جرب تاني");
     }
@@ -865,7 +1093,17 @@ function LoginScreen({
       color: "#fff",
       margin: "18px 0 22px"
     }
-  }, "منصة إدارة المبيعات"), err && /*#__PURE__*/React.createElement("div", {
+  }, "منصة إدارة المبيعات"), !err && notice && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.warnBg,
+      border: `1px solid rgba(255,255,255,0.16)`,
+      borderRadius: 8,
+      padding: "10px 14px",
+      color: T.warn,
+      fontSize: 13,
+      marginBottom: 14
+    }
+  }, notice), err && /*#__PURE__*/React.createElement("div", {
     style: {
       background: T.dangerBg,
       border: `1px solid rgba(255,255,255,0.16)`,
@@ -1037,7 +1275,7 @@ function LeadModal({
 }) {
   const isNew = !lead;
   const blank = {
-    id: Date.now().toString(),
+    id: newId("L"),
     clientName: "",
     phone: "",
     phoneCountry: "+966",
@@ -2555,10 +2793,10 @@ function LeadRow({
   user,
   onEdit,
   onActivity,
-  onQuickSend,
   onViewDetail,
   onInlineStage,
-  showFull
+  showFull,
+  pending
 }) {
   const tS = TELE_STAGES.find(s => s.id === lead.teleStage);
   const sS = SALES_STAGES.find(s => s.id === lead.salesStage);
@@ -2741,9 +2979,17 @@ function LeadRow({
       display: "flex",
       gap: 5
     }
-  }, onQuickSend && lead.phone && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onQuickSend(lead),
-    title: "واتساب",
+  }, pending && /*#__PURE__*/React.createElement("span", {
+    title: "جاري الحفظ على السيرفر",
+    style: {
+      fontSize: 12,
+      alignSelf: "center"
+    }
+  }, "⏳"), waLink(lead.phone, lead.phoneCountry) && /*#__PURE__*/React.createElement("a", {
+    href: waLink(lead.phone, lead.phoneCountry),
+    target: "_blank",
+    rel: "noreferrer",
+    title: "كلّم العميل واتساب",
     style: {
       ...btnGhost,
       padding: "5px 8px",
@@ -2751,7 +2997,8 @@ function LeadRow({
       background: "rgba(31,122,92,0.30)",
       borderColor: "rgba(255,255,255,0.16)",
       color: "#9ee0c4",
-      fontWeight: 700
+      fontWeight: 700,
+      textDecoration: "none"
     }
   }, "💬"), /*#__PURE__*/React.createElement("button", {
     onClick: () => onActivity(lead),
@@ -3409,888 +3656,16 @@ function Dashboard({
     }, [tbl("📈 التحويل حسب المصدر", "source"), tbl("📈 التحويل حسب النيتش", "niche")]);
   })());
 }
-function NewChatModal({
-  instances,
-  user,
-  onSend,
-  onClose
-}) {
-  const allowed = can.allChats(user) ? instances : instances.filter(i => (user.instances || []).includes(i.id));
-  const [inst, setInst] = useState(allowed[0]?.id || "");
-  const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState("+966");
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  return /*#__PURE__*/React.createElement(Modal, {
-    title: "✉️ محادثة جديدة",
-    onClose: onClose,
-    maxWidth: 460
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "الرقم المُرسِل (Instance)"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: inst,
-    onChange: e => setInst(e.target.value),
-    style: inputS
-  }, allowed.map(i => /*#__PURE__*/React.createElement("option", {
-    key: i.id,
-    value: i.id
-  }, i.label || i.id)))), /*#__PURE__*/React.createElement(Field, {
-    label: "رقم العميل"
-  }, /*#__PURE__*/React.createElement(PhoneInput, {
-    phone: phone,
-    country: country,
-    onPhone: setPhone,
-    onCountry: setCountry
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "الرسالة"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    value: text,
-    onChange: e => setText(e.target.value),
-    rows: 3,
-    style: {
-      ...inputS,
-      resize: "vertical"
-    }
-  })), /*#__PURE__*/React.createElement("button", {
-    disabled: busy,
-    onClick: async () => {
-      const chatId = toChatId(phone, country);
-      if (!chatId || !text.trim() || !inst) {
-        alert("كمّل البيانات");
-        return;
-      }
-      setBusy(true);
-      await onSend(inst, chatId, text.trim());
-      setBusy(false);
-      onClose();
-    },
-    style: {
-      ...btnPrimary,
-      width: "100%",
-      opacity: busy ? 0.7 : 1
-    }
-  }, busy ? "⏳ جارٍ الإرسال..." : "📤 إرسال"));
-}
-function WhatsAppTab({
-  user,
-  instances,
-  funnel,
-  quickReplies,
-  leads,
-  slaHours = 2,
-  onOpenLead,
-  onCreateLeadFromChat
-}) {
-  const [chats, setChats] = useState([]);
-  const [activeChat, setActiveChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [waSearch, setWaSearch] = useState("");
-  const [fStatus, setFStatus] = useState("");
-  const [fInst, setFInst] = useState("");
-  const [showFavs, setShowFavs] = useState(false);
-  const [favMsgs, setFavMsgs] = useState([]);
-  const [showNew, setShowNew] = useState(false);
-  const [showSched, setShowSched] = useState(false);
-  const [schedList, setSchedList] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [loadingChats, setLoadingChats] = useState(true);
-  const msgsEndRef = useRef(null);
-  const activeChatRef = useRef(null);
-  activeChatRef.current = activeChat;
-  const loadChats = useCallback(async () => {
-    try {
-      const res = await jsonpCall({
-        action: "getChats",
-        userId: user.id
-      });
-      if (res.success) setChats(res.chats || []);
-    } catch (e) {
-      console.error(e);
-    }
-    setLoadingChats(false);
-  }, [user.id]);
-  const loadMessages = useCallback(async (chatId, markRead = true) => {
-    try {
-      const res = await jsonpCall({
-        action: "getMessages",
-        chatId,
-        markRead: markRead ? "1" : "0",
-        userId: user.id
-      });
-      if (res.success) {
-        setMessages(res.messages || []);
-        if (markRead) setChats(prev => prev.map(c => c.chat_id === chatId ? {
-          ...c,
-          unread: 0
-        } : c));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, [user.id]);
-
-  // تحميل أولي + تحديث تلقائي كل 20 ثانية
-  useEffect(() => {
-    loadChats();
-    const iv = setInterval(() => {
-      loadChats();
-      if (activeChatRef.current) loadMessages(activeChatRef.current.chat_id, false);
-    }, 20000);
-    return () => clearInterval(iv);
-  }, [loadChats, loadMessages]);
-  useEffect(() => {
-    if (msgsEndRef.current) msgsEndRef.current.scrollIntoView({
-      behavior: "smooth"
-    });
-  }, [messages]);
-  const openChat = c => {
-    setActiveChat(c);
-    setShowFavs(false);
-    setShowSched(false);
-    loadMessages(c.chat_id);
-  };
-  const loadSched = async () => {
-    setShowSched(true);
-    setShowFavs(false);
-    setActiveChat(null);
-    try {
-      const res = await jsonpCall({
-        action: "getScheduled",
-        userId: user.id
-      });
-      if (res.success) setSchedList(res.items || []);
-    } catch (e) {}
-  };
-  const send = async () => {
-    if (!text.trim() || !activeChat) return;
-    const t = text.trim();
-    setText("");
-    setBusy(true);
-    // إضافة فورية للواجهة
-    const tempMsg = {
-      id: "tmp" + Date.now(),
-      chat_id: activeChat.chat_id,
-      direction: "out",
-      text: t,
-      ts: new Date().toISOString(),
-      agent: user.name,
-      fav: false
-    };
-    setMessages(prev => [...prev, tempMsg]);
-    try {
-      const res = await jsonpCall({
-        action: "sendWA",
-        instanceId: activeChat.instance_id,
-        chatId: activeChat.chat_id,
-        text: t,
-        agentId: user.id,
-        agentName: user.name
-      });
-      if (!res.success) alert("❌ فشل الإرسال: " + (res.error || ""));
-    } catch (e) {
-      alert("❌ مشكلة في الاتصال");
-    }
-    setBusy(false);
-  };
-  const sendNew = async (instanceId, chatId, t) => {
-    try {
-      const res = await jsonpCall({
-        action: "sendWA",
-        instanceId,
-        chatId,
-        text: t,
-        agentId: user.id,
-        agentName: user.name
-      });
-      if (res.success) {
-        await loadChats();
-      } else alert("❌ " + (res.error || "فشل الإرسال"));
-    } catch (e) {
-      alert("❌ مشكلة في الاتصال");
-    }
-  };
-  const toggleFav = async m => {
-    setMessages(prev => prev.map(x => x.id === m.id ? {
-      ...x,
-      fav: !x.fav
-    } : x));
-    try {
-      await jsonpCall({
-        action: "toggleFavMsg",
-        id: m.id
-      });
-    } catch (e) {}
-  };
-  const setChatFunnel = async (c, statusId) => {
-    setChats(prev => prev.map(x => x.chat_id === c.chat_id ? {
-      ...x,
-      funnel: statusId
-    } : x));
-    if (activeChat?.chat_id === c.chat_id) setActiveChat(a => ({
-      ...a,
-      funnel: statusId
-    }));
-    try {
-      await jsonpCall({
-        action: "setChatStatus",
-        chatId: c.chat_id,
-        status: statusId
-      });
-    } catch (e) {}
-  };
-  const loadFavs = async () => {
-    setShowFavs(true);
-    setShowSched(false);
-    setActiveChat(null);
-    try {
-      const res = await jsonpCall({
-        action: "getFavMessages",
-        userId: user.id
-      });
-      if (res.success) setFavMsgs(res.messages || []);
-    } catch (e) {}
-  };
-  const linkedLead = activeChat ? leads.find(l => String(l.id) === String(activeChat.leadId)) || leads.find(l => normPhone(l.phone) && chatIdToPhone(activeChat.chat_id).endsWith(normPhone(l.phone))) : null;
-  const filteredChats = chats.filter(c => {
-    const q = waSearch.toLowerCase();
-    const mq = !q || (c.name || "").toLowerCase().includes(q) || (c.chat_id || "").includes(q) || (c.lastMsgText || "").toLowerCase().includes(q);
-    return mq && (!fStatus || c.funnel === fStatus) && (!fInst || c.instance_id === fInst);
-  }).sort((a, b) => new Date(b.lastMsgAt || 0) - new Date(a.lastMsgAt || 0));
-  const totalUnread = chats.reduce((s, c) => s + Number(c.unread || 0), 0);
-  const showAllInst = can.allChats(user);
-  const chip = (label, color, active, onClick) => /*#__PURE__*/React.createElement("button", {
-    onClick: onClick,
-    style: {
-      padding: "4px 12px",
-      borderRadius: 20,
-      border: `1px solid ${active ? color : T.cardBorder}`,
-      cursor: "pointer",
-      fontSize: 11,
-      fontWeight: 700,
-      background: active ? color : "rgba(255,255,255,0.06)",
-      color: active ? "#0b2233" : T.textSoft,
-      whiteSpace: "nowrap"
-    }
-  }, label);
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      marginBottom: 12,
-      alignItems: "center",
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      margin: 0,
-      fontSize: 17,
-      color: T.text
-    }
-  }, "💬 الواتساب ", totalUnread > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: T.danger,
-      color: "#fff",
-      borderRadius: 20,
-      padding: "2px 10px",
-      fontSize: 12,
-      marginRight: 6
-    }
-  }, totalUnread)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: loadFavs,
-    style: {
-      ...btnGhost,
-      padding: "7px 14px",
-      fontSize: 12,
-      background: showFavs ? "rgba(233,220,140,0.12)" : "rgba(255,255,255,0.06)",
-      borderColor: showFavs ? "#e9dc8c" : T.cardBorder,
-      color: showFavs ? T.warn : T.textSoft,
-      fontWeight: 700
-    }
-  }, "⭐ المفضلة"), /*#__PURE__*/React.createElement("button", {
-    onClick: loadSched,
-    style: {
-      ...btnGhost,
-      padding: "7px 14px",
-      fontSize: 12,
-      background: showSched ? T.accentBg : "rgba(255,255,255,0.06)",
-      borderColor: showSched ? "rgba(255,255,255,0.16)" : T.cardBorder,
-      color: showSched ? T.accent : T.textSoft,
-      fontWeight: 700
-    }
-  }, "⏰ المجدولة"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowNew(true),
-    style: btnPrimary
-  }, "✉️ محادثة جديدة")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 12,
-      flexWrap: "wrap",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: waSearch,
-    onChange: e => setWaSearch(e.target.value),
-    placeholder: "🔍 بحث بالاسم أو الرقم أو النص...",
-    style: {
-      ...inputS,
-      width: "auto",
-      minWidth: 200,
-      padding: "7px 12px",
-      fontSize: 12
-    }
-  }), chip("الكل", "#9fb0bf", !fStatus, () => setFStatus("")), funnel.map(f => chip(f.label, f.color, fStatus === f.id, () => setFStatus(fStatus === f.id ? "" : f.id))), showAllInst && instances.length > 1 && /*#__PURE__*/React.createElement("select", {
-    value: fInst,
-    onChange: e => setFInst(e.target.value),
-    style: {
-      ...inputS,
-      width: "auto",
-      padding: "6px 10px",
-      fontSize: 12
-    }
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "كل الأرقام"), instances.map(i => /*#__PURE__*/React.createElement("option", {
-    key: i.id,
-    value: i.id
-  }, i.label || i.id)))), /*#__PURE__*/React.createElement("div", {
-    className: "wa-layout",
-    style: {
-      display: "flex",
-      gap: 12,
-      height: "calc(100vh - 240px)",
-      minHeight: 400
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "wa-list-panel",
-    style: {
-      width: 330,
-      flexShrink: 0,
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      boxShadow: T.shadow,
-      overflowY: "auto"
-    }
-  }, loadingChats && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: T.textMuted,
-      textAlign: "center",
-      padding: 30,
-      fontSize: 13
-    }
-  }, "⏳ جارٍ التحميل..."), !loadingChats && filteredChats.length === 0 && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: T.textMuted,
-      textAlign: "center",
-      padding: 30,
-      fontSize: 13
-    }
-  }, "لا يوجد محادثات", fStatus || waSearch ? " مطابقة" : "", " بعد", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11
-    }
-  }, "الرسايل الجاية هتظهر هنا تلقائياً")), filteredChats.map(c => {
-    const f = funnel.find(x => x.id === c.funnel);
-    const slaBreach = Number(c.unread) > 0 && c.lastMsgAt && Date.now() - new Date(c.lastMsgAt).getTime() > slaHours * 3600000;
-    const inst = instances.find(i => i.id === c.instance_id);
-    const lead = leads.find(l => String(l.id) === String(c.leadId));
-    return /*#__PURE__*/React.createElement("div", {
-      key: c.chat_id,
-      onClick: () => openChat(c),
-      style: {
-        padding: "12px 14px",
-        borderBottom: `1px solid ${T.cardBorder}`,
-        cursor: "pointer",
-        background: activeChat?.chat_id === c.chat_id ? T.accentBg : slaBreach ? T.dangerBg : "transparent",
-        borderRight: slaBreach ? `3px solid ${T.danger}` : "none"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 3
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontWeight: 700,
-        fontSize: 13,
-        color: T.text,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        overflow: "hidden"
-      }
-    }, f && /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        background: f.color,
-        flexShrink: 0
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, lead?.clientName || c.name || chatIdToPhone(c.chat_id)), lead && /*#__PURE__*/React.createElement("span", {
-      title: "مرتبط بعميل",
-      style: {
-        fontSize: 10
-      }
-    }, "🔗")), /*#__PURE__*/React.createElement("span", {
-      style: {
-        flexShrink: 0,
-        display: "flex",
-        gap: 4,
-        alignItems: "center"
-      }
-    }, slaBreach && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: T.danger,
-        fontSize: 9,
-        fontWeight: 800,
-        background: T.dangerBg,
-        borderRadius: 6,
-        padding: "1px 5px"
-      }
-    }, "⏰ من غير رد"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: T.textMuted,
-        fontSize: 10
-      }
-    }, timeAgo(c.lastMsgAt)))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: T.textSoft,
-        fontSize: 11,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        flex: 1
-      }
-    }, c.lastMsgText || ""), Number(c.unread) > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        background: T.ok,
-        color: "#fff",
-        borderRadius: 12,
-        padding: "1px 7px",
-        fontSize: 10,
-        fontWeight: 800,
-        flexShrink: 0,
-        marginRight: 6
-      }
-    }, c.unread)), showAllInst && /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: T.textMuted,
-        fontSize: 10,
-        marginTop: 2
-      }
-    }, "📱 ", inst?.label || c.instance_id));
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      boxShadow: T.shadow,
-      display: "flex",
-      flexDirection: "column",
-      overflow: "hidden"
-    }
-  }, showSched ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 16,
-      overflowY: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 800,
-      fontSize: 14,
-      color: T.accent,
-      marginBottom: 14
-    }
-  }, "⏰ الرسايل المجدولة (", schedList.length, ")"), schedList.length === 0 && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: T.textMuted,
-      fontSize: 13
-    }
-  }, "مفيش رسايل مجدولة — من زر 💬 بجوار أي عميل تقدر تحدد وقت للإرسال"), schedList.map(s => /*#__PURE__*/React.createElement("div", {
-    key: s.id,
-    style: {
-      background: T.accentBg,
-      border: "1px solid rgba(255,255,255,0.16)",
-      borderRadius: 10,
-      padding: "10px 14px",
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: T.accent,
-      fontWeight: 800
-    }
-  }, "📅 ", String(s.sendAt).replace("T", " "), " → +", chatIdToPhone(s.chatId)), /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      if (!confirm("إلغاء الرسالة دي؟")) return;
-      try {
-        await jsonpCall({
-          action: "cancelScheduled",
-          id: s.id
-        });
-        setSchedList(p => p.filter(x => x.id !== s.id));
-      } catch (e) {}
-    },
-    style: {
-      ...btnGhost,
-      padding: "3px 10px",
-      fontSize: 11,
-      color: T.danger
-    }
-  }, "إلغاء")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      color: T.text
-    }
-  }, s.text), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: T.textMuted,
-      marginTop: 3
-    }
-  }, "بواسطة: ", s.createdBy || "—")))) : showFavs ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 16,
-      overflowY: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 800,
-      fontSize: 14,
-      color: T.warn,
-      marginBottom: 14
-    }
-  }, "⭐ الرسايل المفضلة (", favMsgs.length, ")"), favMsgs.length === 0 && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: T.textMuted,
-      fontSize: 13
-    }
-  }, "معلّمتش رسايل لسه — دوس على ⭐ جنب أي رسالة مهمة"), favMsgs.map(m => {
-    const c = chats.find(x => x.chat_id === m.chat_id);
-    return /*#__PURE__*/React.createElement("div", {
-      key: m.id,
-      onClick: () => {
-        if (c) openChat(c);
-      },
-      style: {
-        background: "rgba(233,220,140,0.12)",
-        border: "1px solid rgba(255,255,255,0.16)",
-        borderRadius: 10,
-        padding: "10px 14px",
-        marginBottom: 8,
-        cursor: c ? "pointer" : "default"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: T.warn,
-        fontWeight: 700,
-        marginBottom: 3
-      }
-    }, c?.name || chatIdToPhone(m.chat_id), " · ", timeAgo(m.ts), " ", m.direction === "out" ? "· 📤 " + (m.agent || "") : ""), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        color: T.text
-      }
-    }, m.text));
-  })) : !activeChat ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 44
-    }
-  }, "💬"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: T.textMuted,
-      fontSize: 13
-    }
-  }, "اختار محادثة من القائمة أو ابدأ محادثة جديدة")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "12px 16px",
-      borderBottom: `1px solid ${T.cardBorder}`,
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "hide-desktop",
-    onClick: () => setActiveChat(null),
-    style: {
-      ...btnGhost,
-      padding: "4px 10px",
-      fontSize: 12
-    }
-  }, "‹ رجوع"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      minWidth: 120
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 800,
-      fontSize: 14,
-      color: T.text
-    }
-  }, linkedLead?.clientName || activeChat.name || chatIdToPhone(activeChat.chat_id)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: T.textMuted,
-      fontSize: 11,
-      direction: "ltr",
-      textAlign: "right"
-    }
-  }, "+", chatIdToPhone(activeChat.chat_id))), /*#__PURE__*/React.createElement("select", {
-    value: activeChat.funnel || "",
-    onChange: e => setChatFunnel(activeChat, e.target.value),
-    style: {
-      ...inputS,
-      width: "auto",
-      padding: "6px 10px",
-      fontSize: 12,
-      fontWeight: 700,
-      color: funnel.find(f => f.id === activeChat.funnel)?.color || T.textSoft
-    }
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "— بدون حالة —"), funnel.map(f => /*#__PURE__*/React.createElement("option", {
-    key: f.id,
-    value: f.id
-  }, f.label))), linkedLead ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenLead(linkedLead),
-    style: {
-      ...btnGhost,
-      padding: "6px 12px",
-      fontSize: 12,
-      color: T.accent,
-      borderColor: "rgba(255,255,255,0.16)",
-      background: T.accentBg,
-      fontWeight: 700
-    }
-  }, "🔗 فتح ملف العميل") : /*#__PURE__*/React.createElement("button", {
-    onClick: () => onCreateLeadFromChat(activeChat),
-    style: {
-      ...btnGhost,
-      padding: "6px 12px",
-      fontSize: 12,
-      color: T.ok,
-      borderColor: "rgba(255,255,255,0.16)",
-      background: T.okBg,
-      fontWeight: 700
-    }
-  }, "➕ تحويل لعميل محتمل")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      overflowY: "auto",
-      padding: 16,
-      background: T.surface2
-    }
-  }, messages.map(m => /*#__PURE__*/React.createElement("div", {
-    key: m.id,
-    style: {
-      display: "flex",
-      justifyContent: m.direction === "out" ? "flex-start" : "flex-end",
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: "75%",
-      padding: "9px 13px",
-      borderRadius: m.direction === "out" ? "12px 12px 12px 3px" : "12px 12px 3px 12px",
-      background: m.direction === "out" ? "#25658B" : "rgba(255,255,255,0.10)",
-      color: m.direction === "out" ? "#fff" : T.text,
-      boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
-      position: "relative",
-      fontSize: 13,
-      lineHeight: 1.5
-    }
-  }, m.text, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      alignItems: "center",
-      marginTop: 4,
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 9,
-      opacity: 0.65
-    }
-  }, timeAgo(m.ts), m.direction === "out" && m.agent ? " · " + m.agent : ""), /*#__PURE__*/React.createElement("button", {
-    onClick: () => toggleFav(m),
-    title: "مفضلة",
-    style: {
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      fontSize: 12,
-      opacity: m.fav ? 1 : 0.35,
-      padding: 0
-    }
-  }, "⭐"))))), /*#__PURE__*/React.createElement("div", {
-    ref: msgsEndRef
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 14px",
-      borderTop: `1px solid ${T.cardBorder}`,
-      display: "flex",
-      gap: 8,
-      alignItems: "flex-end"
-    }
-  }, quickReplies.length > 0 && /*#__PURE__*/React.createElement("select", {
-    value: "",
-    onChange: e => {
-      if (e.target.value) setText(t => t ? t + " " + e.target.value : e.target.value);
-    },
-    style: {
-      ...inputS,
-      width: 44,
-      padding: "9px 6px",
-      fontSize: 14,
-      flexShrink: 0
-    },
-    title: "ردود جاهزة"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "⚡"), quickReplies.map(q => /*#__PURE__*/React.createElement("option", {
-    key: q.id,
-    value: q.text
-  }, q.title))), /*#__PURE__*/React.createElement("textarea", {
-    value: text,
-    onChange: e => setText(e.target.value),
-    rows: 1,
-    placeholder: "اكتب رسالتك...",
-    onKeyDown: e => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        send();
-      }
-    },
-    style: {
-      ...inputS,
-      flex: 1,
-      resize: "none",
-      maxHeight: 100
-    }
-  }), /*#__PURE__*/React.createElement("label", {
-    title: "إرفاق صورة / ملف",
-    style: {
-      ...btnGhost,
-      padding: "10px 12px",
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, "📎", /*#__PURE__*/React.createElement("input", {
-    type: "file",
-    style: {
-      display: "none"
-    },
-    onChange: async e => {
-      const f = e.target.files[0];
-      e.target.value = "";
-      if (!f || !activeChat) return;
-      setBusy(true);
-      const res = await sendMediaRequest({
-        instanceId: activeChat.instance_id,
-        chatId: activeChat.chat_id,
-        caption: text.trim(),
-        file: f,
-        agentName: user.name
-      });
-      setBusy(false);
-      if (res.success) {
-        setText("");
-        loadMessages(activeChat.chat_id, false);
-      } else alert("❌ " + (res.error || "فشل إرسال الملف"));
-    }
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: send,
-    disabled: busy,
-    style: {
-      ...btnPrimary,
-      padding: "10px 18px",
-      opacity: busy ? 0.7 : 1,
-      flexShrink: 0
-    }
-  }, "📤"))))), showNew && /*#__PURE__*/React.createElement(NewChatModal, {
-    instances: instances,
-    user: user,
-    onSend: sendNew,
-    onClose: () => setShowNew(false)
-  }));
-}
 function RulesTab({
   users,
-  instances,
-  funnel,
-  quickReplies,
   autoCfg,
   targets,
   onSaveUser,
-  onSaveInstances,
-  onSaveFunnel,
-  onSaveQR,
-  onDeleteQR,
   onSaveAuto
 }) {
   const [sub, setSub] = useState("users");
   const [edits, setEdits] = useState({});
-  const [newInstId, setNewInstId] = useState("");
-  const [newInstLabel, setNewInstLabel] = useState("");
-  const [newFunnel, setNewFunnel] = useState({
-    label: "",
-    color: "#a9d0e8"
-  });
-  const [newQR, setNewQR] = useState({
-    title: "",
-    text: "",
-    stage: "all"
-  });
-  const [auto, setAuto] = useState({
-    defaultInstance: "",
-    slaHours: 2,
-    autoRenewMsg: false,
-    renewTemplate: ""
-  });
+  const [auto, setAuto] = useState({});
   const [tgt, setTgt] = useState({});
   const [recExp, setRecExp] = useState([]);
   const [newRec, setNewRec] = useState({
@@ -4323,7 +3698,6 @@ function RulesTab({
     password: "",
     name: "",
     role: "sales",
-    instances: [],
     perms: {},
     active: true,
     _new: true
@@ -4332,17 +3706,8 @@ function RulesTab({
     id: "users",
     label: "👥 الموظفون والصلاحيات"
   }, {
-    id: "instances",
-    label: "📱 الأرقام"
-  }, {
-    id: "funnel",
-    label: "🎯 حالات الفانل"
-  }, {
-    id: "qr",
-    label: "⚡ السكربتات"
-  }, {
     id: "auto",
-    label: "🤖 الأتمتة والأهداف"
+    label: "🎯 الأهداف والمصاريف المتكررة"
   }];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4423,12 +3788,15 @@ function RulesTab({
         direction: "ltr"
       }
     })), /*#__PURE__*/React.createElement(Field, {
-      label: "كلمة المرور"
+      label: u._new ? "كلمة المرور" : "كلمة مرور جديدة (اختياري)"
     }, /*#__PURE__*/React.createElement("input", {
       value: u.password || "",
       onChange: e => setU(id, {
         password: e.target.value
       }),
+      placeholder: u._new ? "" : "سيبها فاضية لو مش هتغيّرها",
+      autoCapitalize: "none",
+      autoCorrect: "off",
       style: {
         ...inputS,
         direction: "ltr"
@@ -4445,50 +3813,6 @@ function RulesTab({
       key: r,
       value: r
     }, ROLES[r].label))))), /*#__PURE__*/React.createElement(Field, {
-      label: "📱 الأرقام المسموحة (الموظف مش هيشوف غيرهم)"
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap"
-      }
-    }, instances.length === 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: T.textMuted,
-        fontSize: 12
-      }
-    }, "ضيف أرقام من تاب \"الأرقام\" الأول"), instances.map(inst => {
-      const checked = (u.instances || []).includes(inst.id);
-      return /*#__PURE__*/React.createElement("label", {
-        key: inst.id,
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          fontSize: 12,
-          background: checked ? T.accentBg : T.surface2,
-          border: `1px solid ${checked ? "rgba(255,255,255,0.16)" : T.cardBorder}`,
-          borderRadius: 8,
-          padding: "6px 10px",
-          cursor: "pointer",
-          fontWeight: 600,
-          color: checked ? T.accent : T.textSoft
-        }
-      }, /*#__PURE__*/React.createElement("input", {
-        type: "checkbox",
-        checked: checked,
-        onChange: e => {
-          const cur = new Set(u.instances || []);
-          e.target.checked ? cur.add(inst.id) : cur.delete(inst.id);
-          setU(id, {
-            instances: [...cur]
-          });
-        },
-        style: {
-          accentColor: T.primary
-        }
-      }), inst.label || inst.id);
-    }))), /*#__PURE__*/React.createElement(Field, {
       label: "🔐 الصلاحيات"
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -4555,8 +3879,8 @@ function RulesTab({
       }
     }), u.active !== false ? "نشط ✅" : "موقوف ⛔"), /*#__PURE__*/React.createElement("button", {
       onClick: async () => {
-        if (!u.username || !u.password || !u.name) {
-          alert("كمّل الاسم واليوزر والباسورد");
+        if (!u.username || !u.name || u._new && !u.password) {
+          alert(u._new ? "كمّل الاسم واليوزر والباسورد" : "كمّل الاسم واليوزر");
           return;
         }
         const clean = {
@@ -4574,370 +3898,7 @@ function RulesTab({
       },
       style: btnPrimary
     }, "💾 حفظ")));
-  }))), sub === "instances" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 560
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      padding: 18,
-      boxShadow: T.shadow,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text,
-      marginBottom: 12
-    }
-  }, "➕ إضافة رقم (Instance من Taayer)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Instance ID (زي: instance12004)"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newInstId,
-    onChange: e => setNewInstId(e.target.value),
-    style: {
-      ...inputS,
-      direction: "ltr"
-    },
-    placeholder: "instance12004"
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "اسم واضح للفريق"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newInstLabel,
-    onChange: e => setNewInstLabel(e.target.value),
-    style: inputS,
-    placeholder: "رقم مبيعات ١"
-  }))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (!newInstId.trim()) return;
-      onSaveInstances([...instances, {
-        id: newInstId.trim(),
-        label: newInstLabel.trim() || newInstId.trim()
-      }]);
-      setNewInstId("");
-      setNewInstLabel("");
-    },
-    style: btnPrimary
-  }, "➕ إضافة"), /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      try {
-        const res = await jsonpCall({
-          action: "syncInstances"
-        });
-        if (res.success && res.instances && res.instances.length) {
-          onSaveInstances(res.instances);
-          alert("✅ تم مزامنة " + res.instances.length + " رقم من Taayer");
-        } else alert("⚠️ " + (res.error || "مفيش أرقام جديدة أو تأكد من التوكن"));
-      } catch (e) {
-        alert("❌ فشل الاتصال بالسيرفر");
-      }
-    },
-    style: {
-      ...btnGhost,
-      marginTop: 0,
-      color: "#9ee0c4",
-      borderColor: "rgba(255,255,255,0.16)",
-      background: "rgba(31,122,92,0.30)",
-      fontWeight: 700
-    }
-  }, "🔄 مزامنة من Taayer")), instances.map(inst => /*#__PURE__*/React.createElement("div", {
-    key: inst.id,
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 12,
-      padding: "12px 16px",
-      boxShadow: T.shadow,
-      marginBottom: 8,
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text
-    }
-  }, "📱 ", inst.label), /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: T.textMuted,
-      fontSize: 11,
-      direction: "ltr",
-      textAlign: "right"
-    }
-  }, inst.id)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (confirm("حذف الرقم من السستم؟ (مش هيتحذف من Taayer)")) onSaveInstances(instances.filter(i => i.id !== inst.id));
-    },
-    style: {
-      ...btnGhost,
-      padding: "5px 12px",
-      fontSize: 12,
-      color: T.danger
-    }
-  }, "🗑️")))), sub === "funnel" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 560
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      padding: 18,
-      boxShadow: T.shadow,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text,
-      marginBottom: 12
-    }
-  }, "➕ إضافة حالة جديدة للفانل"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "flex-end"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "الاسم"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newFunnel.label,
-    onChange: e => setNewFunnel(f => ({
-      ...f,
-      label: e.target.value
-    })),
-    style: inputS,
-    placeholder: "مثال: عرض مُرسل"
-  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Field, {
-    label: "اللون"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "color",
-    value: newFunnel.color,
-    onChange: e => setNewFunnel(f => ({
-      ...f,
-      color: e.target.value
-    })),
-    style: {
-      width: 60,
-      height: 40,
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      background: "none"
-    }
-  }))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (!newFunnel.label.trim()) return;
-      onSaveFunnel([...funnel, {
-        id: "f" + Date.now(),
-        label: newFunnel.label.trim(),
-        color: newFunnel.color
-      }]);
-      setNewFunnel({
-        label: "",
-        color: "#a9d0e8"
-      });
-    },
-    style: {
-      ...btnPrimary,
-      marginBottom: 13
-    }
-  }, "➕"))), funnel.map(f => /*#__PURE__*/React.createElement("div", {
-    key: f.id,
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 12,
-      padding: "12px 16px",
-      boxShadow: T.shadow,
-      marginBottom: 8,
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 14,
-      height: 14,
-      borderRadius: "50%",
-      background: f.color
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text
-    }
-  }, f.label)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (confirm("حذف الحالة؟")) onSaveFunnel(funnel.filter(x => x.id !== f.id));
-    },
-    style: {
-      ...btnGhost,
-      padding: "5px 12px",
-      fontSize: 12,
-      color: T.danger
-    }
-  }, "🗑️")))), sub === "qr" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 640
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      padding: 18,
-      boxShadow: T.shadow,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text,
-      marginBottom: 12
-    }
-  }, "➕ سكربت جديد (الموظف يبعته بضغطة ⚡)"), /*#__PURE__*/React.createElement(Field, {
-    label: "العنوان"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newQR.title,
-    onChange: e => setNewQR(q => ({
-      ...q,
-      title: e.target.value
-    })),
-    style: inputS,
-    placeholder: "مثال: رسالة الافتتاح"
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "🎯 مرتبط بمرحلة (السكربت هيظهر للموظف أول حاجة لما العميل يكون في المرحلة دي)"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: newQR.stage,
-    onChange: e => setNewQR(q => ({
-      ...q,
-      stage: e.target.value
-    })),
-    style: inputS
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "all"
-  }, "🌐 عام — كل المراحل"), /*#__PURE__*/React.createElement("optgroup", {
-    label: "مراحل الاستقطاب"
-  }, TELE_STAGES.map(s => /*#__PURE__*/React.createElement("option", {
-    key: s.id,
-    value: s.id
-  }, s.icon, " ", s.label))), /*#__PURE__*/React.createElement("optgroup", {
-    label: "مراحل المبيعات"
-  }, SALES_STAGES.map(s => /*#__PURE__*/React.createElement("option", {
-    key: s.id,
-    value: s.id
-  }, s.icon, " ", s.label))))), /*#__PURE__*/React.createElement(Field, {
-    label: "نص الرسالة"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    value: newQR.text,
-    onChange: e => setNewQR(q => ({
-      ...q,
-      text: e.target.value
-    })),
-    rows: 3,
-    style: {
-      ...inputS,
-      resize: "vertical"
-    },
-    placeholder: "السلام عليكم، معاك ... من شركة Falak..."
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (!newQR.title.trim() || !newQR.text.trim()) return;
-      onSaveQR({
-        id: "q" + Date.now(),
-        title: newQR.title.trim(),
-        text: newQR.text.trim(),
-        stage: newQR.stage || "all"
-      });
-      setNewQR({
-        title: "",
-        text: "",
-        stage: "all"
-      });
-    },
-    style: btnPrimary
-  }, "➕ إضافة")), quickReplies.map(q => /*#__PURE__*/React.createElement("div", {
-    key: q.id,
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 12,
-      padding: "12px 16px",
-      boxShadow: T.shadow,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: T.text
-    }
-  }, "⚡ ", q.title, " ", (() => {
-    const st = TELE_STAGES.find(s => s.id === q.stage) || SALES_STAGES.find(s => s.id === q.stage);
-    return st ? /*#__PURE__*/React.createElement(Badge, {
-      label: st.icon + " " + st.label,
-      color: st.color
-    }) : /*#__PURE__*/React.createElement(Badge, {
-      label: "عام",
-      color: "#9fb0bf"
-    });
-  })()), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (confirm("حذف الرد؟")) onDeleteQR(q.id);
-    },
-    style: {
-      ...btnGhost,
-      padding: "4px 10px",
-      fontSize: 12,
-      color: T.danger
-    }
-  }, "🗑️")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: T.textSoft,
-      fontSize: 12,
-      whiteSpace: "pre-wrap"
-    }
-  }, q.text)))), sub === "auto" && /*#__PURE__*/React.createElement("div", {
+  }))), sub === "auto" && /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 720
     }
@@ -5018,87 +3979,6 @@ function RulesTab({
       }
     }));
   })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.card,
-      backdropFilter: T.blur,
-      WebkitBackdropFilter: T.blur,
-      borderRadius: 14,
-      padding: 18,
-      boxShadow: T.shadow,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontWeight: 800,
-      fontSize: 14,
-      color: T.text,
-      marginBottom: 14
-    }
-  }, "🤖 الأتمتة"), /*#__PURE__*/React.createElement(Field, {
-    label: "⏱️ حد التأخير في الرد (بالساعات) — المحادثة تنور أحمر بعده"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: auto.slaHours,
-    onChange: e => setAuto(a => ({
-      ...a,
-      slaHours: Number(e.target.value) || 2
-    })),
-    style: {
-      ...inputS,
-      width: 120
-    }
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "📱 الرقم المستخدم في الرسايل التلقائية"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: auto.defaultInstance || "",
-    onChange: e => setAuto(a => ({
-      ...a,
-      defaultInstance: e.target.value
-    })),
-    style: inputS
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "— اختر —"), instances.map(i => /*#__PURE__*/React.createElement("option", {
-    key: i.id,
-    value: i.id
-  }, i.label || i.id)))), /*#__PURE__*/React.createElement("label", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      fontSize: 13,
-      fontWeight: 700,
-      color: auto.autoRenewMsg ? T.ok : T.textSoft,
-      cursor: "pointer",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    checked: !!auto.autoRenewMsg,
-    onChange: e => setAuto(a => ({
-      ...a,
-      autoRenewMsg: e.target.checked
-    })),
-    style: {
-      accentColor: T.ok,
-      width: 16,
-      height: 16
-    }
-  }), "🔁 تفعيل رسالة التجديد التلقائية (بتتبعت قبل التجديد بـ ٣٠ و١٤ و٧ أيام)"), auto.autoRenewMsg && /*#__PURE__*/React.createElement(Field, {
-    label: "نص رسالة التجديد — استخدم {الاسم} و{التاريخ} و{القيمة}"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    value: auto.renewTemplate || "",
-    onChange: e => setAuto(a => ({
-      ...a,
-      renewTemplate: e.target.value
-    })),
-    rows: 3,
-    style: {
-      ...inputS,
-      resize: "vertical"
-    },
-    placeholder: "أهلاً {الاسم} 👋 نذكر حضرتك إن تجديد الاشتراك ({القيمة}) موعده {التاريخ}. يسعدنا استمرار التعاون 🌟"
-  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: T.card,
       backdropFilter: T.blur,
@@ -5237,87 +4117,14 @@ function RulesTab({
       ...btnPrimary,
       width: "100%"
     }
-  }, "💾 حفظ كل إعدادات الأتمتة والأهداف")));
-}
-function fileToBase64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result).split(",")[1]);
-    r.onerror = () => rej(new Error("read failed"));
-    r.readAsDataURL(file);
-  });
-}
-async function sendMediaRequest({
-  instanceId,
-  chatId,
-  caption,
-  file,
-  agentName
-}) {
-  if (file.size > 8 * 1024 * 1024) return {
-    success: false,
-    error: "أقصى حجم للملف 8 ميجا"
-  };
-  const requestId = "req" + Date.now() + Math.random().toString(36).slice(2);
-  let data;
-  try {
-    data = await fileToBase64(file);
-  } catch (e) {
-    return {
-      success: false,
-      error: "فشل قراءة الملف"
-    };
-  }
-  try {
-    await fetch(SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {
-        "Content-Type": "text/plain"
-      },
-      body: JSON.stringify({
-        action: "sendWAMedia",
-        requestId,
-        instanceId,
-        chatId,
-        caption: caption || "",
-        fileName: file.name,
-        mimeType: file.type,
-        data,
-        agentName
-      })
-    });
-  } catch (e) {
-    return {
-      success: false,
-      error: "فشل الاتصال بالسيرفر"
-    };
-  }
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 2500));
-    try {
-      const res = await jsonpCall({
-        action: "checkRequest",
-        id: requestId
-      });
-      if (res.done) return res;
-    } catch (e) {}
-  }
-  return {
-    success: false,
-    error: "استغرق الرفع وقت طويل — جرب ملف أصغر أو اعمل ريفريش وشوف المحادثة"
-  };
+  }, "💾 حفظ الأهداف والمصاريف المتكررة")));
 }
 function LeadDetailDrawer({
   lead,
   user,
-  instances,
-  quickReplies,
   onEdit,
   onActivity,
-  onQuickSend,
-  onClose,
-  onSave
+  onClose
 }) {
   if (!lead) return null;
   const tS = TELE_STAGES.find(s => s.id === lead.teleStage);
@@ -5551,14 +4358,18 @@ function LeadDetailDrawer({
       flexShrink: 0,
       background: T.surface2
     }
-  }, onQuickSend && lead.phone && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onQuickSend(lead),
+  }, waLink(lead.phone, lead.phoneCountry) && /*#__PURE__*/React.createElement("a", {
+    href: waLink(lead.phone, lead.phoneCountry),
+    target: "_blank",
+    rel: "noreferrer",
     style: {
       ...btnPrimary,
       flex: 1,
       background: T.wa,
       color: "#ffffff",
-      fontSize: 13
+      fontSize: 13,
+      textAlign: "center",
+      textDecoration: "none"
     }
   }, "💬 واتساب"), /*#__PURE__*/React.createElement("button", {
     onClick: () => onActivity(lead),
@@ -5626,344 +4437,71 @@ function Row({
     }
   }, children));
 }
-function QuickSendModal({
-  lead,
-  user,
-  instances,
-  quickReplies,
-  onClose,
-  onSent
-}) {
-  const allowed = can.allChats(user) ? instances : instances.filter(i => (user.instances || []).includes(i.id));
-  const instId = allowed[0]?.id || "";
-  const chatId = toChatId(lead.phone, lead.phoneCountry);
-  const [msgs, setMsgs] = useState([]);
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const endRef = React.useRef(null);
+const LEAD_EDIT_FIELDS = ["clientName", "phone", "phoneCountry", "email", "niche", "storeUrl", "storeNeeds", "storeAnalysis", "solutionPlan", "teleStage", "salesStage", "teleAgent", "salesAgent", "priority", "source", "budget", "currency", "notes", "followUpDate", "meetingDate", "proposalDate", "closingDate", "dmName", "dmPhone", "dmPhoneCountry", "dmPosition", "contractUrl", "reportUrls", "country", "platform", "tier", "externalId"];
 
-  // جيب المحادثة السابقة
-  useEffect(() => {
-    if (!chatId) {
-      setLoading(false);
-      return;
-    }
-    (async () => {
-      try {
-        const res = await jsonpCall({
-          action: "getMessages",
-          chatId,
-          markRead: "1",
-          userId: user.id
-        });
-        if (res.success) setMsgs(res.messages || []);
-      } catch (e) {}
-      setLoading(false);
-    })();
-  }, [chatId]);
-
-  // scroll للآخر
-  useEffect(() => {
-    endRef.current && endRef.current.scrollIntoView({
-      behavior: "smooth"
-    });
-  }, [msgs]);
-  const send = async () => {
-    if (!text.trim() || !chatId || !instId) return;
-    const t = text.trim();
-    setText("");
-    setBusy(true);
-    // إضافة فورية
-    const tmp = {
-      id: "tmp" + Date.now(),
-      direction: "out",
-      text: t,
-      ts: new Date().toISOString(),
-      agent: user.name
+// نطبّق التعديلات اللي لسه في الطابور فوق نسخة السيرفر — عشان الشاشة ماترجعش لورا
+function overlayPending(l) {
+  let x = l;
+  Outbox.ops.forEach(o => {
+    if (o.action === "patchLead" && String(o.id) === String(l.id)) x = {
+      ...x,
+      ...o.changes
     };
-    setMsgs(p => [...p, tmp]);
-    try {
-      const res = await jsonpCall({
-        action: "sendWA",
-        instanceId: instId,
-        chatId,
-        text: t,
-        agentId: user.id,
-        agentName: user.name
-      });
-      if (!res.success) alert("❌ " + (res.error || "فشل الإرسال"));else {
-        onSent && onSent(t);
-      }
-    } catch (e) {
-      alert("❌ مشكلة في الاتصال");
+    if (o.action === "addActivity" && String(o.leadId) === String(l.id)) {
+      const log = x.activityLog || [];
+      if (!log.some(a => a.action === o.entry.action && a.date === o.entry.date)) x = {
+        ...x,
+        activityLog: [...log, o.entry]
+      };
     }
-    setBusy(false);
-  };
-  const onKey = e => {
-    if ((e.ctrlKey || e.metaKey || e.shiftKey === false) && e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
-  const stageId = lead.salesStage || lead.teleStage || "";
-  const stageName = (SALES_STAGES.find(s => s.id === stageId) || TELE_STAGES.find(s => s.id === stageId))?.label || "";
-  const myScripts = quickReplies.filter(q => q.stage === stageId);
-  const genScripts = quickReplies.filter(q => !q.stage || q.stage === "all");
-  return /*#__PURE__*/React.createElement("div", {
+  });
+  return x;
+}
+function upsertLeads(prev, incoming, removedIds) {
+  const pos = new Map(prev.map((l, i) => [String(l.id), i]));
+  const next = prev.slice();
+  const added = [];
+  (incoming || []).forEach(l => {
+    const v = overlayPending(l);
+    const i = pos.get(String(l.id));
+    if (i === undefined) added.push(v);else next[i] = v;
+  });
+  let res = added.length ? [...added.reverse(), ...next] : next;
+  if (removedIds && removedIds.length) {
+    const rm = new Set(removedIds.map(String));
+    res = res.filter(l => !rm.has(String(l.id)));
+  }
+  return res;
+}
+function SaveStatus({
+  ops,
+  onRetry
+}) {
+  const n = ops.length;
+  if (!n) return /*#__PURE__*/React.createElement("span", {
+    title: "كل التعديلات اتحفظت على السيرفر",
     style: {
-      position: "fixed",
-      inset: 0,
-      background: "rgba(4,16,26,0.62)",
-      backdropFilter: "blur(6px)",
-      WebkitBackdropFilter: "blur(6px)",
-      zIndex: 1000,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 12
-    },
-    onClick: e => e.target === e.currentTarget && onClose()
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "rgba(19,55,78,0.94)",
-      backdropFilter: "blur(28px)",
-      WebkitBackdropFilter: "blur(28px)",
-      border: "1px solid rgba(255,255,255,0.18)",
-      borderRadius: 24,
-      width: "100%",
-      maxWidth: 460,
-      height: "78vh",
-      maxHeight: 640,
-      display: "flex",
-      flexDirection: "column",
-      boxShadow: "0 24px 64px rgba(4,16,26,0.45)",
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.primary,
-      padding: "14px 18px",
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 40,
-      height: 40,
-      borderRadius: "50%",
-      background: "rgba(255,255,255,0.15)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 18,
-      flexShrink: 0
-    }
-  }, (lead.clientName || "؟")[0]), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: "#fff",
-      fontWeight: 800,
-      fontSize: 15,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
+      color: T.ok,
+      fontSize: 11,
       whiteSpace: "nowrap"
     }
-  }, lead.clientName || "عميل #" + lead.id), /*#__PURE__*/React.createElement("div", {
+  }, "☁️ محفوظ");
+  const stuck = Outbox.lastError || ops.some(o => o.tries > 0);
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onRetry,
+    title: stuck ? "فيه تعديلات محفوظة على جهازك ولسه ماوصلتش للسيرفر — هتتبعت تلقائي أول ما الاتصال يرجع" : "جاري الحفظ",
     style: {
-      color: "rgba(255,255,255,0.6)",
-      fontSize: 11,
-      direction: "ltr",
-      textAlign: "right"
-    }
-  }, lead.phoneCountry || "+966", " ", lead.phone, " ", instId && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginRight: 6,
-      background: "rgba(255,255,255,0.15)",
-      padding: "1px 8px",
-      borderRadius: 10
-    }
-  }, "📱 ", allowed[0]?.label || instId))), /*#__PURE__*/React.createElement("button", {
-    onClick: onClose,
-    style: {
-      background: "rgba(255,255,255,0.15)",
-      border: "none",
-      color: "#fff",
-      width: 30,
-      height: 30,
-      borderRadius: 8,
-      cursor: "pointer",
-      fontSize: 15,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, "✕")), (myScripts.length > 0 || genScripts.length > 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 12px",
-      borderBottom: `1px solid ${T.cardBorder}`,
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap",
-      flexShrink: 0,
-      background: T.surface2
-    }
-  }, stageName && myScripts.length > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      color: T.textMuted,
-      alignSelf: "center"
-    }
-  }, "🎯 ", stageName, ":"), myScripts.map(q => /*#__PURE__*/React.createElement("button", {
-    key: q.id,
-    onClick: () => setText(q.text.replace(/{الاسم}/g, lead.clientName || "")),
-    style: {
+      background: stuck ? T.warnBg : "rgba(255,255,255,0.08)",
+      border: `1px solid ${stuck ? "rgba(236,201,138,0.45)" : "rgba(255,255,255,0.16)"}`,
+      color: stuck ? T.warn : T.textSoft,
+      borderRadius: 999,
       padding: "4px 10px",
-      borderRadius: 20,
-      border: `1px solid ${T.accent}22`,
-      background: T.accentBg,
-      color: T.accent,
       fontSize: 11,
-      cursor: "pointer",
       fontWeight: 600,
-      whiteSpace: "nowrap"
-    }
-  }, "⚡ ", q.title)), genScripts.map(q => /*#__PURE__*/React.createElement("button", {
-    key: q.id,
-    onClick: () => setText(q.text.replace(/{الاسم}/g, lead.clientName || "")),
-    style: {
-      padding: "4px 10px",
-      borderRadius: 20,
-      border: `1px solid ${T.cardBorder}`,
-      background: T.surface,
-      color: T.textSoft,
-      fontSize: 11,
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, q.title))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      overflowY: "auto",
-      padding: "14px 16px",
-      background: T.surface2,
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, loading && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      color: T.textMuted,
-      fontSize: 13,
-      marginTop: 40
-    }
-  }, "⏳ جارٍ تحميل المحادثة..."), !loading && msgs.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      color: T.textMuted,
-      fontSize: 13,
-      marginTop: 40
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 36,
-      marginBottom: 8
-    }
-  }, "💬"), "مفيش محادثات سابقة — ابعت أول رسالة!"), msgs.map((m, i) => {
-    const isOut = m.direction === "out";
-    return /*#__PURE__*/React.createElement("div", {
-      key: m.id || i,
-      style: {
-        display: "flex",
-        justifyContent: isOut ? "flex-start" : "flex-end"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        maxWidth: "78%",
-        padding: "9px 13px",
-        fontSize: 13,
-        lineHeight: 1.55,
-        borderRadius: isOut ? "16px 16px 16px 3px" : "16px 16px 3px 16px",
-        background: isOut ? "#25658B" : "rgba(255,255,255,0.10)",
-        color: isOut ? "#fff" : T.text,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        wordBreak: "break-word"
-      }
-    }, m.text), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        opacity: 0.55,
-        marginTop: 4,
-        textAlign: "left"
-      }
-    }, timeAgo(m.ts), isOut && m.agent ? " · " + m.agent : "")));
-  }), /*#__PURE__*/React.createElement("div", {
-    ref: endRef
-  })), !instId ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 14,
-      background: T.surface,
-      borderTop: `1px solid ${T.cardBorder}`,
-      textAlign: "center",
-      color: T.danger,
-      fontSize: 12,
-      fontWeight: 700
-    }
-  }, "⚠️ مفيش رقم متصل — روح Rules وضيف Instance") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 12px",
-      background: T.surface,
-      borderTop: `1px solid ${T.cardBorder}`,
-      display: "flex",
-      gap: 8,
-      alignItems: "flex-end",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("textarea", {
-    value: text,
-    onChange: e => setText(e.target.value),
-    onKeyDown: onKey,
-    rows: 2,
-    placeholder: "اكتب رسالتك... (Enter للإرسال، Shift+Enter لسطر جديد)",
-    autoFocus: true,
-    style: {
-      ...inputS,
-      flex: 1,
-      resize: "none",
-      maxHeight: 90,
-      fontSize: 13,
-      borderRadius: 12,
-      padding: "10px 14px"
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: send,
-    disabled: busy || !text.trim(),
-    style: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      border: "none",
-      cursor: "pointer",
-      flexShrink: 0,
-      fontSize: 18,
-      background: text.trim() ? T.primary : "rgba(255,255,255,0.16)",
-      color: text.trim() ? "#fff" : T.textMuted,
-      opacity: busy ? 0.6 : 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, busy ? "⏳" : "📤"))));
+  }, stuck ? `⚠️ ${n} لسه ماتحفظتش — إعادة` : `⏳ بيتحفظ (${n})`);
 }
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -5974,6 +4512,7 @@ function App() {
       return null;
     }
   });
+  const [loginNotice, setLoginNotice] = useState("");
   const [leads, setLeads] = useState([]);
   const [renewals, setRenewals] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -5982,15 +4521,14 @@ function App() {
     officePercent: 10,
     taxPercent: 14
   });
-  const [instances, setInstances] = useState([]);
-  const [funnel, setFunnel] = useState(DEFAULT_FUNNEL);
-  const [quickReplies, setQuickReplies] = useState([]);
   const [usersList, setUsersList] = useState([]);
-  const [waUnread, setWaUnread] = useState(0);
-  const [slaHours, setSlaHours] = useState(2);
   const [targets, setTargets] = useState({});
   const [autoCfg, setAutoCfg] = useState({});
   const [loading, setLoading] = useState(false);
+  const [loadInfo, setLoadInfo] = useState("");
+  const [syncErr, setSyncErr] = useState("");
+  const [outbox, setOutbox] = useState([]);
+  const [toastMsg, setToastMsg] = useState("");
   const [tab, setTab] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [fNiche, setFNiche] = useState("");
@@ -6010,97 +4548,260 @@ function App() {
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const [period, setPeriod] = useState("monthly");
   const [showAlerts, setShowAlerts] = useState(false);
-  const [quickSendLead, setQuickSendLead] = useState(null);
   const [detailLead, setDetailLead] = useState(null);
   const [importBusy, setImportBusy] = useState(false);
   const [alertsShown, setAlertsShown] = useState(false);
+  const userRef = useRef(currentUser);
+  userRef.current = currentUser;
+  const leadsRef = useRef(leads);
+  leadsRef.current = leads;
+  const metaRef = useRef({});
+  const syncRef = useRef({
+    since: 0,
+    running: false,
+    fullLoaded: false
+  });
   const loadRunRef = useRef(0);
-  const loadAll = useCallback(async user => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const runId = ++loadRunRef.current;
-      const data = await jsonpCall({
-        action: "getAll",
-        userId: user.id,
-        role: user.role,
-        leadsLimit: 1500
-      }, 90000);
-      if (data.success) {
-        setLeads(data.leads || []);
-        // باقي الليدز تتحمّل على دفعات في الخلفية
-        if (data.leadsHasMore) {
-          (async () => {
-            let offset = data.leadsNextOffset || 1500;
-            let more = true;
-            while (more && runId === loadRunRef.current) {
-              try {
-                const pg = await jsonpCall({
-                  action: "getLeadsPage",
-                  userId: user.id,
-                  role: user.role,
-                  offset,
-                  limit: 2000
-                }, 90000);
-                if (!pg.success || runId !== loadRunRef.current) break;
-                if (pg.leads && pg.leads.length) setLeads(prev => prev.concat(pg.leads));
-                offset = pg.nextOffset;
-                more = !!pg.hasMore;
-              } catch (pe) {
-                console.error("getLeadsPage:", pe);
-                break;
-              }
-            }
-          })();
-        }
-        setRenewals(data.renewals || []);
-        if (data.users) {
-          setUsersList(data.users);
-          USERS.length = 0;
-          data.users.forEach(u => USERS.push(u));
-        }
-        if (data.instances) setInstances(data.instances);
-        if (data.funnelStatuses && data.funnelStatuses.length) setFunnel(data.funnelStatuses);
-        if (data.quickReplies) setQuickReplies(data.quickReplies);
-        if (data.waUnread !== undefined) setWaUnread(Number(data.waUnread) || 0);
-        if (data.slaHours !== undefined) setSlaHours(Number(data.slaHours) || 2);
-        if (data.targets) setTargets(data.targets);
-        if (data.autoCfg) setAutoCfg(data.autoCfg);
-        if (can.finance(user)) {
-          setExpenses(data.expenses || []);
-          setCollections(data.collections || []);
-          if (data.settings) setSettings(data.settings);
-        }
-        try {
-          localStorage.setItem("maawan_cache_" + user.id, JSON.stringify(data));
-        } catch (e) {}
-      }
-    } catch (e) {
-      console.error("loadAll:", e);
-      try {
-        const c = JSON.parse(localStorage.getItem("maawan_cache_" + user.id) || "null");
-        if (c) {
-          setLeads(c.leads || []);
-          setRenewals(c.renewals || []);
-          setExpenses(c.expenses || []);
-          setCollections(c.collections || []);
-          if (c.settings) setSettings(c.settings);
-          if (c.instances) setInstances(c.instances);
-          if (c.funnelStatuses && c.funnelStatuses.length) setFunnel(c.funnelStatuses);
-          if (c.quickReplies) setQuickReplies(c.quickReplies);
-          if (c.users) {
-            setUsersList(c.users);
-            USERS.length = 0;
-            c.users.forEach(u => USERS.push(u));
-          }
-        }
-      } catch (e2) {}
+  const loadingRef = useRef(false);
+  const toastTimer = useRef(null);
+  if (currentUser) {
+    SESSION.token = currentUser.token || "";
+    SESSION.uid = currentUser.id;
+    SESSION.role = currentUser.role;
+    SESSION.v8 = !!currentUser.v8;
+  }
+  const toast = m => {
+    setToastMsg(m);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMsg(""), 5000);
+  };
+  const applyMeta = (data, user) => {
+    const m = metaRef.current;
+    if (data.renewals) {
+      setRenewals(data.renewals);
+      m.renewals = data.renewals;
     }
-    setLoading(false);
+    if (data.users) {
+      setUsersList(data.users);
+      USERS.length = 0;
+      data.users.forEach(u => USERS.push(u));
+      m.users = data.users;
+    }
+    if (data.targets) {
+      setTargets(data.targets);
+      m.targets = data.targets;
+    }
+    if (data.autoCfg) {
+      setAutoCfg(data.autoCfg);
+      m.autoCfg = data.autoCfg;
+    }
+    if (can.finance(user)) {
+      if (data.expenses) {
+        setExpenses(data.expenses);
+        m.expenses = data.expenses;
+      }
+      if (data.collections) {
+        setCollections(data.collections);
+        m.collections = data.collections;
+      }
+      if (data.settings) {
+        setSettings(data.settings);
+        m.settings = data.settings;
+      }
+    }
+  };
+  const saveCache = useCallback(() => {
+    const u = userRef.current;
+    if (!u || !syncRef.current.fullLoaded) return;
+    IDB.set("data_" + u.id, {
+      leads: leadsRef.current,
+      meta: metaRef.current,
+      since: syncRef.current.since,
+      savedAt: Date.now(),
+      v8: !!u.v8
+    });
   }, []);
   useEffect(() => {
-    if (currentUser) loadAll(currentUser);
-  }, [currentUser, loadAll]);
+    const t = setTimeout(saveCache, 4000);
+    return () => clearTimeout(t);
+  }, [leads, renewals, saveCache]);
+  const syncChanges = useCallback(async () => {
+    const u = userRef.current;
+    const sr = syncRef.current;
+    if (!u || !u.v8 || sr.running || !sr.since || loadingRef.current) return;
+    sr.running = true;
+    try {
+      const r = await api({
+        action: "getChanges",
+        since: sr.since
+      }, 45000);
+      if (r && r.success) {
+        if (r.tooMany) {
+          sr.running = false;
+          loadAll(u, {
+            skipCache: true
+          });
+          return;
+        }
+        if (r.leads && r.leads.length || r.removed && r.removed.length) setLeads(prev => upsertLeads(prev, r.leads, r.removed));
+        sr.since = r.serverTime;
+        setSyncErr("");
+      }
+    } catch (e) {/* مفيش نت — هنحاول المرة الجاية */}
+    sr.running = false;
+  }, []);
+  const loadAll = useCallback(async (user, opts = {}) => {
+    if (!user) return;
+    const runId = ++loadRunRef.current;
+    loadingRef.current = true;
+    setLoading(true);
+    setSyncErr("");
+    const cacheKey = "data_" + user.id;
+    // ١) نفتح فوراً من النسخة المحفوظة على الجهاز
+    if (!opts.skipCache) {
+      const c = await IDB.get(cacheKey);
+      if (c && Array.isArray(c.leads) && runId === loadRunRef.current) {
+        setLeads(c.leads.map(overlayPending));
+        applyMeta(c.meta || {}, user);
+        // ٢) لو السيرفر الجديد والنسخة حديثة: نجيب التغييرات بس (ثواني بدل دقايق)
+        if (user.v8 && c.v8 && c.since && Date.now() - c.since < 3 * 86400000) {
+          syncRef.current.since = c.since;
+          syncRef.current.fullLoaded = true;
+          loadingRef.current = false;
+          setLoading(false);
+          syncChanges();
+          api({
+            action: "getAll",
+            leadsLimit: 1
+          }, 90000).then(d => {
+            if (d && d.success && runId === loadRunRef.current) applyMeta(d, user);
+          }).catch(() => {});
+          return;
+        }
+      }
+    }
+    // ٣) تحميل كامل على دفعات
+    try {
+      const data = await api({
+        action: "getAll",
+        leadsLimit: 1500
+      }, 90000);
+      if (runId !== loadRunRef.current) return;
+      if (!data || !data.success) {
+        if (!data || !data.authError) setSyncErr(data && data.error || "تعذّر التحميل من السيرفر");
+        loadingRef.current = false;
+        setLoading(false);
+        return;
+      }
+      applyMeta(data, user);
+      setLeads((data.leads || []).map(overlayPending));
+      const since = data.serverTime || 0;
+      let offset = data.leadsNextOffset,
+        more = !!data.leadsHasMore,
+        count = (data.leads || []).length;
+      const total = data.leadsTotal || count;
+      while (more && runId === loadRunRef.current) {
+        setLoadInfo(`⏳ تحميل العملاء ${fmt(count)} / ${fmt(total)}`);
+        let pg;
+        try {
+          pg = await api({
+            action: "getLeadsPage",
+            offset,
+            limit: 2500
+          }, 90000);
+        } catch (e) {
+          break;
+        }
+        if (!pg || !pg.success || runId !== loadRunRef.current) break;
+        const batch = (pg.leads || []).map(overlayPending);
+        count += batch.length;
+        setLeads(prev => {
+          const have = new Set(prev.map(l => String(l.id)));
+          return prev.concat(batch.filter(l => !have.has(String(l.id))));
+        });
+        offset = pg.nextOffset;
+        more = !!pg.hasMore;
+      }
+      setLoadInfo("");
+      if (runId !== loadRunRef.current) return;
+      if (more) setSyncErr("ماقدرناش نحمّل كل العملاء — دوس 🔄 تاني");
+      syncRef.current.since = since;
+      syncRef.current.fullLoaded = !more;
+    } catch (e) {
+      console.error("loadAll:", e);
+      setSyncErr("مفيش اتصال بالسيرفر — شغالين من آخر نسخة محفوظة على الجهاز");
+    }
+    loadingRef.current = false;
+    setLoading(false);
+    setTimeout(saveCache, 1500);
+  }, [syncChanges, saveCache]);
+  const logout = useCallback(async reason => {
+    const u = userRef.current;
+    if (!reason && Outbox.ops.length && !confirm(`فيه ${Outbox.ops.length} تعديل لسه ماوصلش للسيرفر.\nهيفضلوا محفوظين على الجهاز ويتبعتوا لما تدخل تاني.\n\nتخرج برضه؟`)) return;
+    if (!reason && SESSION.v8) api({
+      action: "logout"
+    }).catch(() => {});
+    if (!reason && u) IDB.del("data_" + u.id);
+    try {
+      localStorage.removeItem("maawan_user");
+    } catch (e) {}
+    loadRunRef.current++;
+    SESSION.token = "";
+    SESSION.uid = "";
+    SESSION.v8 = false;
+    syncRef.current = {
+      since: 0,
+      running: false,
+      fullLoaded: false
+    };
+    setCurrentUser(null);
+    setLeads([]);
+    setRenewals([]);
+    setExpenses([]);
+    setCollections([]);
+    setLoginNotice(reason || "");
+  }, []);
+  SESSION.onAuthError = msg => logout(msg || "انتهت الجلسة — سجّل دخول تاني");
+  Outbox.onResult = (op, res) => {
+    if (res.success) {
+      if (res.lead && SESSION.v8) setLeads(prev => upsertLeads(prev, [res.lead]));
+      if (res.merged && res.merged.length) toast("ℹ️ حد تاني عدّل نفس الخانة في نفس الوقت — الكلامين اتدمجوا ومفيش حاجة ضاعت");
+      return;
+    }
+    if (op.action === "createLead") {
+      setLeads(prev => prev.filter(l => String(l.id) !== String(op.lead.id)));
+      alert((res.error || "تعذّر إضافة العميل") + "\n\n(العميل اللي حاولت تضيفه: " + (op.lead.clientName || "") + ")");
+    } else if (res.notFound) {
+      toast("⚠️ " + (res.error || "العميل مش موجود"));
+    } else {
+      alert("⚠️ " + (res.error || "تعذّر الحفظ"));
+    }
+  };
+  useEffect(() => {
+    if (!currentUser) return;
+    Outbox.load(currentUser.id);
+    const un = Outbox.subscribe(setOutbox);
+    Outbox.run();
+    loadAll(currentUser);
+    return un;
+  }, [currentUser?.id, currentUser?.token]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") {
+        syncChanges();
+        Outbox.run();
+      }
+    };
+    const t = setInterval(tick, 30000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("focus", tick);
+    };
+  }, [currentUser?.id, syncChanges]);
   useEffect(() => {
     if (!currentUser || alertsShown || leads.length === 0 && renewals.length === 0) return;
     const la = leads.flatMap(getLeadAlerts);
@@ -6114,43 +4815,60 @@ function App() {
     try {
       localStorage.setItem("maawan_user", JSON.stringify(user));
     } catch (e) {}
+    setLoginNotice("");
     setCurrentUser(user);
     setAlertsShown(false);
   };
-  const logout = () => {
-    try {
-      localStorage.removeItem("maawan_user");
-    } catch (e) {}
-    setCurrentUser(null);
-    setLeads([]);
-    setRenewals([]);
-    setExpenses([]);
-    setCollections([]);
-  };
-  const saveGeneric = async (action, key, payload) => {
-    try {
-      await jsonpCall({
-        action,
-        [key]: JSON.stringify(payload)
+  const queue = (action, params) => Outbox.push({
+    action,
+    params
+  });
+
+  // حفظ عميل: الجديد بيتضاف، والقديم بيتبعت منه الخانات اللي اتغيّرت بس
+  const commitLead = (updated, original) => {
+    const exists = original && leadsRef.current.some(l => String(l.id) === String(original.id));
+    if (!exists) {
+      const lead = {
+        ...updated,
+        updatedAt: today()
+      };
+      setLeads(prev => [lead, ...prev]);
+      Outbox.push({
+        action: "createLead",
+        lead
       });
-      setTimeout(() => loadAll(currentUser), 2000);
-    } catch (e) {
-      console.error(action, e);
+      return;
     }
-  };
-  const handleSaveLead = updated => {
-    setLeads(prev => {
-      const i = prev.findIndex(l => l.id === updated.id);
-      if (i >= 0) {
-        const n = [...prev];
-        n[i] = updated;
-        return n;
+    const changes = {},
+      base = {};
+    LEAD_EDIT_FIELDS.forEach(k => {
+      const a = original[k] == null ? "" : original[k];
+      const b = updated[k] == null ? "" : updated[k];
+      if (String(a) !== String(b)) {
+        changes[k] = b;
+        base[k] = a;
       }
-      return [updated, ...prev];
     });
+    if (!Object.keys(changes).length) return;
+    const cur = leadsRef.current.find(l => String(l.id) === String(original.id)) || original;
+    const merged = {
+      ...cur,
+      ...changes,
+      updatedAt: today()
+    };
+    setLeads(prev => prev.map(l => String(l.id) === String(merged.id) ? merged : l));
+    Outbox.push({
+      action: "patchLead",
+      id: original.id,
+      changes,
+      base,
+      legacyLead: merged
+    });
+  };
+  const handleSaveLead = (updated, original) => {
     setShowLeadModal(false);
     setEditLead(null);
-    saveGeneric("saveLead", "lead", updated);
+    commitLead(updated, original);
   };
   const handleActivity = (leadId, entry) => {
     setLeads(prev => prev.map(l => l.id === leadId ? {
@@ -6158,13 +4876,16 @@ function App() {
       activityLog: [...(l.activityLog || []), entry],
       updatedAt: today()
     } : l));
-    jsonpCall({
+    Outbox.push({
       action: "addActivity",
       leadId,
-      entry: JSON.stringify(entry),
-      userId: currentUser.id
-    }).catch(e => console.error(e));
+      entry
+    });
   };
+  const handleInlineStage = (lead, field, value) => commitLead({
+    ...lead,
+    [field]: value || (field === "salesStage" ? null : "")
+  }, lead);
   const handleSaveRenewal = r => {
     const renewedNow = r._renewedNow;
     const clean = {
@@ -6182,10 +4903,12 @@ function App() {
     });
     setShowRenewalModal(false);
     setEditRenewal(null);
-    saveGeneric("saveRenewal", "renewal", clean);
+    queue("saveRenewal", {
+      renewal: JSON.stringify(clean)
+    });
     if (renewedNow && Number(clean.contractValue || 0) > 0) {
       const col = {
-        id: "C" + Date.now(),
+        id: newId("C"),
         date: today(),
         clientName: clean.clientName,
         type: "تجديد",
@@ -6195,130 +4918,93 @@ function App() {
         createdAt: today()
       };
       setCollections(p => [col, ...p]);
-      jsonpCall({
-        action: "saveCollection",
+      queue("saveCollection", {
         collection: JSON.stringify(col)
-      }).catch(e => console.error(e));
+      });
     }
   };
   const handleAddExpense = x => {
     setExpenses(p => [x, ...p]);
-    saveGeneric("saveExpense", "expense", x);
+    queue("saveExpense", {
+      expense: JSON.stringify(x)
+    });
   };
   const handleEditExpense = x => {
     setExpenses(p => p.map(e => e.id === x.id ? x : e));
-    saveGeneric("saveExpense", "expense", x);
+    queue("saveExpense", {
+      expense: JSON.stringify(x)
+    });
   };
   const handleDeleteExpense = id => {
     setExpenses(p => p.filter(e => e.id !== id));
-    jsonpCall({
-      action: "deleteExpense",
+    queue("deleteExpense", {
       id
-    }).catch(e => console.error(e));
+    });
   };
   const handleAddCollection = x => {
     setCollections(p => [x, ...p]);
-    saveGeneric("saveCollection", "collection", x);
+    queue("saveCollection", {
+      collection: JSON.stringify(x)
+    });
   };
   const handleEditCollection = x => {
     setCollections(p => p.map(e => e.id === x.id ? x : e));
-    saveGeneric("saveCollection", "collection", x);
+    queue("saveCollection", {
+      collection: JSON.stringify(x)
+    });
   };
   const handleDeleteCollection = id => {
     setCollections(p => p.filter(e => e.id !== id));
-    jsonpCall({
-      action: "deleteCollection",
+    queue("deleteCollection", {
       id
-    }).catch(e => console.error(e));
+    });
   };
   const handleSaveSettings = s => {
     setSettings(prev => ({
       ...prev,
       ...s
     }));
-    jsonpCall({
-      action: "saveSettings",
+    queue("saveSettings", {
       settings: JSON.stringify(s)
-    }).then(() => alert("✅ تم الحفظ")).catch(e => console.error(e));
+    });
+    toast("✅ اتحفظ");
   };
   const handleSaveUser = async u => {
-    setUsersList(prev => {
-      const i = prev.findIndex(x => x.id === u.id);
-      if (i >= 0) {
-        const n = [...prev];
-        n[i] = u;
-        return n;
-      }
-      return [...prev, u];
-    });
     try {
-      await jsonpCall({
+      const r = await api({
         action: "saveUser",
         user: JSON.stringify(u)
       });
-      alert("✅ تم حفظ " + u.name);
+      if (r && r.success) {
+        const clean = {
+          ...u
+        };
+        delete clean.password;
+        setUsersList(prev => {
+          const i = prev.findIndex(x => x.id === u.id);
+          if (i >= 0) {
+            const n = [...prev];
+            n[i] = clean;
+            return n;
+          }
+          return [...prev, clean];
+        });
+        alert("✅ تم حفظ " + u.name);
+      } else alert("❌ " + (r && r.error || "مشكلة في الحفظ"));
     } catch (e) {
-      alert("❌ مشكلة في الحفظ");
+      alert("❌ مفيش اتصال بالسيرفر — جرب تاني");
     }
-  };
-  const handleSaveInstances = list => {
-    setInstances(list);
-    jsonpCall({
-      action: "saveSettings",
-      settings: JSON.stringify({
-        instances: list
-      })
-    }).catch(e => console.error(e));
-  };
-  const handleSaveFunnel = list => {
-    setFunnel(list);
-    jsonpCall({
-      action: "saveSettings",
-      settings: JSON.stringify({
-        funnelStatuses: list
-      })
-    }).catch(e => console.error(e));
   };
   const handleSaveAuto = (autoObj, tgtObj) => {
     setAutoCfg(autoObj);
     setTargets(tgtObj);
-    setSlaHours(Number(autoObj.slaHours) || 2);
-    jsonpCall({
-      action: "saveSettings",
+    queue("saveSettings", {
       settings: JSON.stringify({
         autoCfg: autoObj,
-        targets: tgtObj,
-        slaHours: Number(autoObj.slaHours) || 2
+        targets: tgtObj
       })
-    }).then(() => alert("✅ تم حفظ الأتمتة والأهداف")).catch(e => alert("❌ مشكلة في الحفظ"));
-  };
-  const handleSaveQR = q => {
-    setQuickReplies(p => [...p, q]);
-    jsonpCall({
-      action: "saveQuickReply",
-      qr: JSON.stringify(q)
-    }).catch(e => console.error(e));
-  };
-  const handleDeleteQR = id => {
-    setQuickReplies(p => p.filter(q => q.id !== id));
-    jsonpCall({
-      action: "deleteQuickReply",
-      id
-    }).catch(e => console.error(e));
-  };
-  const handleInlineStage = async (lead, field, value) => {
-    const updated = {
-      ...lead,
-      [field]: value || null,
-      updatedAt: today()
-    };
-    setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-    try {
-      await jsonpCall({
-        action: "saveLead",
-        lead: JSON.stringify(updated)
-      });
-    } catch (e) {}
+    });
+    toast("✅ اتحفظت الأهداف والمصاريف المتكررة");
   };
   const handleImportCSV = async file => {
     if (!file) return;
@@ -6346,7 +5032,7 @@ function App() {
         out.push(cur);
         return out.map(v => v.trim());
       };
-      const headers = parseLine(lines[0].replace(/^\uFEFF/, ""));
+      const headers = parseLine(lines[0].replace(/^﻿/, ""));
       const MAP = {
         "الاسم": "clientName",
         "اسم العميل": "clientName",
@@ -6393,7 +5079,7 @@ function App() {
       lines.slice(1).forEach((line, i) => {
         const vals = parseLine(line);
         const obj = {
-          id: String(Date.now()) + i,
+          id: newId("L") + i,
           teleStage: "new_lead",
           salesStage: null,
           priority: "medium",
@@ -6429,45 +5115,20 @@ function App() {
         return;
       }
       setLeads(prev => [...imported, ...prev]);
-      for (const ld of imported) {
-        try {
-          await jsonpCall({
-            action: "saveLead",
-            lead: JSON.stringify(ld)
-          });
-        } catch (e) {}
-      }
-      alert("✅ تم استيراد " + imported.length + " عميل" + (dups ? " — وتم تجاهل " + dups + " مكرر" : ""));
+      imported.forEach(lead => Outbox.push({
+        action: "createLead",
+        lead
+      }));
+      alert("✅ تم تجهيز " + imported.length + " عميل وبيتحفظوا على السيرفر دلوقتي" + (dups ? " — وتم تجاهل " + dups + " مكرر" : "") + "\nتابع علامة الحفظ فوق ☁️");
     } catch (err) {
       alert("❌ تعذّر قراءة الملف: " + err.message);
     }
     setImportBusy(false);
   };
-  // تحويل شات لعميل محتمل
-  const createLeadFromChat = chat => {
-    const phone = chatIdToPhone(chat.chat_id);
-    const isEG = phone.startsWith("20");
-    setEditLead({
-      id: Date.now().toString(),
-      clientName: chat.name || "",
-      phone: phone.replace(/^966|^20/, ""),
-      phoneCountry: isEG ? "+20" : "+966",
-      source: "واتساب",
-      teleStage: "new_lead",
-      salesStage: null,
-      priority: "medium",
-      currency: "SAR",
-      followUpDate: today(),
-      createdAt: today(),
-      updatedAt: today(),
-      activityLog: [],
-      _fromChat: chat.chat_id
-    });
-    setShowLeadModal(true);
-    setTab("leads");
-  };
+  const pendingSet = useMemo(() => Outbox.pendingIds(), [outbox]);
   if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
-    onLogin: login
+    onLogin: login,
+    notice: loginNotice
   });
   growList(NICHES, leads.map(l => l.niche));
   growList(SOURCES, leads.map(l => l.source));
@@ -6497,10 +5158,6 @@ function App() {
     id: "pipeline",
     label: "🔄 مسار المبيعات",
     show: true
-  }, {
-    id: "whatsapp",
-    label: waUnread > 0 ? `💬 واتساب (${waUnread})` : "💬 واتساب",
-    show: can.whatsapp(currentUser)
   }, {
     id: "renewals",
     label: "🔁 التجديدات",
@@ -6617,13 +5274,22 @@ function App() {
       whiteSpace: "nowrap",
       flexShrink: 0
     }
-  }, "🔔 ", alertCount), loading && /*#__PURE__*/React.createElement("span", {
+  }, "🔔 ", alertCount), /*#__PURE__*/React.createElement(SaveStatus, {
+    ops: outbox,
+    onRetry: () => {
+      Outbox.lastError = "";
+      Outbox.run();
+    }
+  }), loading && /*#__PURE__*/React.createElement("span", {
     style: {
       color: "rgba(255,255,255,0.7)",
       fontSize: 11
     }
   }, "⏳"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => loadAll(currentUser),
+    title: "تحديث كامل من السيرفر",
+    onClick: () => loadAll(currentUser, {
+      skipCache: true
+    }),
     style: {
       background: "rgba(255,255,255,0.12)",
       border: "none",
@@ -6666,7 +5332,37 @@ function App() {
       maxWidth: 1400,
       margin: "0 auto"
     }
-  }, tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
+  }, loadInfo && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.accentBg,
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      color: T.accent,
+      fontSize: 12,
+      marginBottom: 12
+    }
+  }, loadInfo, " — تقدر تشتغل عادي وإحنا بنحمّل الباقي"), syncErr && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.warnBg,
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      color: T.warn,
+      fontSize: 12,
+      marginBottom: 12
+    }
+  }, "⚠️ ", syncErr), !currentUser.v8 && currentUser.role === "manager" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: T.dangerBg,
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      color: "#ffd6d6",
+      fontSize: 12,
+      marginBottom: 12
+    }
+  }, "⚠️ السيرفر (Apps Script) لسه على النسخة القديمة — الصق كود v8 واعمل New version عشان الحماية والسرعة الجديدة تشتغل، وبعدين اخرج وادخل تاني."), tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
     leads: visibleLeads,
     renewals: can.renewals(currentUser) ? renewals : [],
     user: currentUser,
@@ -6703,6 +5399,10 @@ function App() {
       }));
       a.download = "falak-leads-" + today() + ".csv";
       a.click();
+      if (SESSION.v8) api({
+        action: "logExport",
+        count: filteredLeads.length
+      }).catch(() => {});
     },
     style: {
       ...btnGhost,
@@ -6867,9 +5567,9 @@ function App() {
       setShowLeadModal(true);
     },
     onActivity: setActivityLead,
-    onQuickSend: can.whatsapp(currentUser) ? setQuickSendLead : null,
     onViewDetail: setDetailLead,
-    onInlineStage: handleInlineStage
+    onInlineStage: handleInlineStage,
+    pending: pendingSet.has(String(l.id))
   }))))), filteredLeads.length > pageSize && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "14px",
@@ -6991,19 +5691,7 @@ function App() {
         padding: 4
       }
     }, "+ ", sl.length - 40, " عميل آخر — استخدم الفلاتر في تاب العملاء"));
-  }))))), tab === "whatsapp" && can.whatsapp(currentUser) && /*#__PURE__*/React.createElement(WhatsAppTab, {
-    user: currentUser,
-    instances: instances,
-    funnel: funnel,
-    quickReplies: quickReplies,
-    leads: leads,
-    slaHours: slaHours,
-    onOpenLead: l => {
-      setEditLead(l);
-      setShowLeadModal(true);
-    },
-    onCreateLeadFromChat: createLeadFromChat
-  }), tab === "renewals" && can.renewals(currentUser) && /*#__PURE__*/React.createElement(RenewalsTab, {
+  }))))), tab === "renewals" && can.renewals(currentUser) && /*#__PURE__*/React.createElement(RenewalsTab, {
     renewals: renewals,
     user: currentUser,
     onEdit: r => {
@@ -7029,35 +5717,21 @@ function App() {
     setPeriod: setPeriod
   }), tab === "rules" && can.rules(currentUser) && /*#__PURE__*/React.createElement(RulesTab, {
     users: usersList,
-    instances: instances,
-    funnel: funnel,
-    quickReplies: quickReplies,
     autoCfg: autoCfg,
     targets: targets,
     onSaveUser: handleSaveUser,
-    onSaveInstances: handleSaveInstances,
-    onSaveFunnel: handleSaveFunnel,
-    onSaveQR: handleSaveQR,
-    onDeleteQR: handleDeleteQR,
     onSaveAuto: handleSaveAuto
   })), showLeadModal && /*#__PURE__*/React.createElement(LeadModal, {
     lead: editLead,
     user: currentUser,
     allLeads: leads,
-    onSave: l => {
-      handleSaveLead(l);
-      if (l._fromChat) jsonpCall({
-        action: "linkChat",
-        chatId: l._fromChat,
-        leadId: l.id
-      }).catch(e => console.error(e));
-    },
+    onSave: l => handleSaveLead(l, editLead),
     onClose: () => {
       setShowLeadModal(false);
       setEditLead(null);
     }
   }), activityLead && /*#__PURE__*/React.createElement(ActivityModal, {
-    lead: activityLead,
+    lead: leads.find(l => l.id === activityLead.id) || activityLead,
     user: currentUser,
     onAddActivity: handleActivity,
     onClose: () => setActivityLead(null)
@@ -7070,36 +5744,37 @@ function App() {
       setEditRenewal(null);
     }
   }), detailLead && /*#__PURE__*/React.createElement(LeadDetailDrawer, {
-    lead: detailLead,
+    lead: leads.find(l => l.id === detailLead.id) || detailLead,
     user: currentUser,
-    instances: instances,
-    quickReplies: quickReplies,
     onEdit: l => {
       setEditLead(l);
       setShowLeadModal(true);
     },
     onActivity: setActivityLead,
-    onQuickSend: can.whatsapp(currentUser) ? l => {
-      setQuickSendLead(l);
-      setDetailLead(null);
-    } : null,
     onClose: () => setDetailLead(null)
-  }), quickSendLead && /*#__PURE__*/React.createElement(QuickSendModal, {
-    lead: quickSendLead,
-    user: currentUser,
-    instances: instances,
-    quickReplies: quickReplies,
-    onSent: summary => handleActivity(quickSendLead.id, {
-      date: today(),
-      agent: currentUser.name,
-      action: "📤 واتساب: " + summary.slice(0, 120)
-    }),
-    onClose: () => setQuickSendLead(null)
   }), showAlerts && /*#__PURE__*/React.createElement(AlertsPopup, {
     alerts: leadAlerts,
     renewalAlerts: renewalAlerts,
     onClose: () => setShowAlerts(false)
-  }));
+  }), toastMsg && /*#__PURE__*/React.createElement("div", {
+    role: "status",
+    style: {
+      position: "fixed",
+      bottom: 18,
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 2000,
+      background: "rgba(15,47,68,0.96)",
+      border: "1px solid rgba(255,255,255,0.22)",
+      color: "#fff",
+      borderRadius: 14,
+      padding: "10px 16px",
+      fontSize: 13,
+      boxShadow: "0 10px 30px rgba(4,16,26,0.5)",
+      maxWidth: "min(92vw,520px)",
+      textAlign: "center"
+    }
+  }, toastMsg));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 
