@@ -92,6 +92,61 @@
 <body>
 <div id="root"></div>
 <script>
+// ===== تنبيه أي خطأ في السستم بدل ما يقع بصمت =====
+(function () {
+  var shown = {};
+  function explain(msg) {
+    msg = String(msg || "");
+    if (/is not a function/.test(msg) && /trim|toLowerCase|includes|split|replace/.test(msg))
+      return "في بيانات في الشيت متخزنة بشكل غلط (غالبًا رقم مكان نص في الاسم أو التليفون).";
+    if (/Cannot read propert|undefined|null/.test(msg))
+      return "في خانة ناقصة أو فاضية في بيانات عميل، والسستم كان متوقع يلاقي فيها قيمة.";
+    if (/timeout/i.test(msg)) return "السيرفر (Google Apps Script) اتأخر في الرد. جرب تاني بعد شوية.";
+    if (/network|Failed to fetch|Load failed/i.test(msg)) return "مفيش اتصال بالسيرفر — اتأكد من النت وجرب تاني.";
+    if (/quota|exceeded/i.test(msg)) return "جوجل وصل لحد الاستخدام اليومي للسكريبت.";
+    return "حصل خطأ غير متوقع في الصفحة.";
+  }
+  function show(msg, where) {
+    msg = String(msg || "خطأ غير معروف");
+    var key = msg + "|" + (where || "");
+    if (shown[key]) return; shown[key] = 1;
+    function draw() {
+      var box = document.getElementById("errBox");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "errBox";
+        box.style.cssText = "position:fixed;bottom:16px;left:16px;z-index:999999;max-width:420px;display:flex;flex-direction:column;gap:8px;direction:rtl;font-family:inherit";
+        document.body.appendChild(box);
+      }
+      var card = document.createElement("div");
+      card.style.cssText = "background:#3b0d12;color:#fff;border:1px solid #ef4444;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:13px;line-height:1.6";
+      var t = document.createElement("div"); t.style.cssText = "font-weight:700;margin-bottom:4px"; t.textContent = "⚠️ في مشكلة: " + explain(msg);
+      var d = document.createElement("div"); d.style.cssText = "opacity:.8;font-size:12px;direction:ltr;text-align:left;word-break:break-word"; d.textContent = msg + (where ? "  (" + where + ")" : "");
+      var x = document.createElement("button"); x.textContent = "إخفاء"; x.style.cssText = "margin-top:8px;background:#ef4444;color:#fff;border:0;border-radius:8px;padding:4px 12px;cursor:pointer";
+      x.onclick = function () { card.remove(); delete shown[key]; };
+      card.appendChild(t); card.appendChild(d); card.appendChild(x); box.appendChild(card);
+    }
+    if (document.body) draw(); else document.addEventListener("DOMContentLoaded", draw);
+  }
+  window.showSystemError = show;
+  window.addEventListener("error", function (e) {
+    show(e.error && e.error.message || e.message, (e.filename || "").split("/").pop() + (e.lineno ? ":" + e.lineno : ""));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason; show(r && r.message || r);
+  });
+  var ce = console.error;
+  console.error = function () {
+    try {
+      var a = [].slice.call(arguments);
+      if (typeof a[0] === "string" && /^(loadAll|getLeadsPage|save|sync)/i.test(a[0]))
+        show(a.map(function (x) { return x && x.message || String(x); }).join(" "));
+    } catch (_) {}
+    return ce.apply(console, arguments);
+  };
+})();
+</script>
+<script>
 const {
   useState,
   useEffect,
@@ -1364,13 +1419,13 @@ function LeadModal({
   }));
   const checkDuplicate = () => {
     const myPhone = normPhone(form.phone);
-    const myName = (form.clientName || "").trim().toLowerCase();
+    const myName = String(form.clientName || "").trim().toLowerCase();
     const byPhone = myPhone ? (allLeads || []).find(l => l.id !== form.id && normPhone(l.phone) === myPhone) : null;
     if (byPhone) return {
       lead: byPhone,
       kind: "الرقم"
     };
-    const byName = myName ? (allLeads || []).find(l => l.id !== form.id && (l.clientName || "").trim().toLowerCase() === myName) : null;
+    const byName = myName ? (allLeads || []).find(l => l.id !== form.id && String(l.clientName || "").trim().toLowerCase() === myName) : null;
     if (byName) return {
       lead: byName,
       kind: "الاسم"
@@ -1382,7 +1437,7 @@ function LeadModal({
       setDupWarn("⚠️ اسم العميل والرقم مطلوبين");
       return;
     }
-    const changedKey = isNew || normPhone(form.phone) !== normPhone(lead.phone) || (form.clientName || "").trim().toLowerCase() !== (lead.clientName || "").trim().toLowerCase();
+    const changedKey = isNew || normPhone(form.phone) !== normPhone(lead.phone) || String(form.clientName || "").trim().toLowerCase() !== String(lead.clientName || "").trim().toLowerCase();
     const dup = changedKey ? checkDuplicate() : null;
     if (dup) {
       setDupWarn(`🚫 لا يمكن الحفظ — ${dup.kind} مكرر ومسجّل مسبقاً للعميل "${dup.lead.clientName}" (رقم ${dup.lead.id})`);
@@ -5163,7 +5218,7 @@ function App() {
         return;
       }
       const seenPhones = new Set(leads.map(l => normPhone(l.phone)).filter(Boolean));
-      const seenNames = new Set(leads.map(l => (l.clientName || "").trim().toLowerCase()).filter(Boolean));
+      const seenNames = new Set(leads.map(l => String(l.clientName || "").trim().toLowerCase()).filter(Boolean));
       const imported = [];
       let dups = 0;
       lines.slice(1).forEach((line, i) => {
@@ -5190,7 +5245,7 @@ function App() {
         });
         if (!obj.clientName && !obj.phone) return;
         const ph = normPhone(obj.phone),
-          nm = (obj.clientName || "").trim().toLowerCase();
+          nm = String(obj.clientName || "").trim().toLowerCase();
         if (ph && seenPhones.has(ph) || nm && seenNames.has(nm)) {
           dups++;
           return;
@@ -5239,7 +5294,7 @@ function App() {
     const q = search.toLowerCase();
     if (!q && !fNiche && !fSource && !fPriority && !fTeleStage && !fSalesStage && !fCountry) return visibleLeads;
     return visibleLeads.filter(l => {
-      const mq = !q || (l.clientName || "").toLowerCase().includes(q) || String(l.phone || "").includes(q) || (l.dmName || "").toLowerCase().includes(q);
+      const mq = !q || String(l.clientName || "").toLowerCase().includes(q) || String(l.phone || "").includes(q) || String(l.dmName || "").toLowerCase().includes(q);
       return mq && (!fNiche || l.niche === fNiche) && (!fSource || l.source === fSource) && (!fPriority || l.priority === fPriority) && (!fTeleStage || l.teleStage === fTeleStage) && (!fSalesStage || l.salesStage === fSalesStage) && (!fCountry || (l.country || "SA") === fCountry);
     });
   }, [visibleLeads, search, fNiche, fSource, fPriority, fTeleStage, fSalesStage, fCountry]);
